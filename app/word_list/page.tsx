@@ -13,6 +13,10 @@ import { ArrowLeft } from "lucide-react"
 
 // Import the QuickAddWordButton component
 import { QuickAddWordButton } from "@/Integration_modules/quick-add-word-button"
+// Import the LearnWordButton component
+import { LearnWordButton } from "@/Integration_modules/learn-word-button"
+// Add this new import for ReviewCardButton
+import { ReviewCardButton } from "@/Integration_modules/review-card-button"
 
 export default function WordListPage() {
   // Initialize the router
@@ -26,12 +30,21 @@ export default function WordListPage() {
     // - disableTransitionOnChange：禁用主题切换时的过渡动画
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <main className="min-h-screen bg-background">
-        {/* Add back button */}
-        <div className="container mx-auto pt-4 px-4">
+        {/* Add back button and action buttons in a flex container */}
+        <div className="container mx-auto pt-4 px-4 flex justify-between items-center">
           <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/book_select")}>
             <ArrowLeft className="h-4 w-4" />
             返回词书选择
           </Button>
+
+          {/* Add buttons in a flex container */}
+          <div className="flex gap-2">
+            {/* Add the ReviewCardButton here */}
+            <ReviewCardButton variant="outline" buttonText="词卡复习" />
+
+            {/* Existing LearnWordButton */}
+            <LearnWordButton variant="default" size="default" buttonText="开始学习单词" />
+          </div>
         </div>
         {/* VocabularyDashboard 组件，用于显示和管理词汇学习内容 */}
         <VocabularyDashboard />
