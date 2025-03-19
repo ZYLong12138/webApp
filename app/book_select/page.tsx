@@ -8,21 +8,21 @@ import { BookButton, BookButtonGrid } from "@/Integration_modules/book-button"
 
 export default function BookSelectPage() {
   return (
-    <div className="container mx-auto py-8 max-w-6xl">
+    <div className="container mx-auto py-8 max-w-6xl bg-background min-h-screen">
       <h1 className="text-3xl font-bold mb-8 text-center">VocabMaster</h1>
 
       <div className="space-y-8">
         {/* Standard Vocabulary Data Section */}
-        <Card className="bg-slate-800 text-white">
+        <Card className="bg-card shadow-sm border">
           <CardContent className="p-6 space-y-6">
-            <div className="flex items-center justify-center gap-2 text-xl font-semibold">
-              <Book className="h-6 w-6" />
+            <div className="flex items-center justify-center gap-2 text-xl font-semibold text-foreground">
+              <Book className="h-6 w-6 text-primary" />
               <h2>标准词汇数据</h2>
             </div>
 
             <div className="relative">
               <Input
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
                 placeholder="搜索词书..."
               />
             </div>
@@ -35,7 +35,7 @@ export default function BookSelectPage() {
                 wordCount={0}
                 description="您的个人词汇学习空间"
                 icon={BookOpen}
-                tagColor="bg-green-500"
+                tagColor="bg-blue-500"
                 tagText="个人词库"
                 href="/word_list"
               />
@@ -43,31 +43,31 @@ export default function BookSelectPage() {
 
             {/* Empty grid message - only show if there are no other books */}
             {false && (
-              <div className="bg-slate-700 rounded-lg p-8 text-center">
-                <p className="text-slate-400">暂无标准词书数据</p>
+              <div className="bg-gray-100 rounded-lg p-8 text-center">
+                <p className="text-gray-500">暂无标准词书数据</p>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Custom Vocabulary Lists Section */}
-        <Card className="bg-slate-800 text-white">
+        <Card className="bg-card shadow-sm border">
           <CardContent className="p-6 space-y-6">
-            <div className="flex items-center justify-center gap-2 text-xl font-semibold">
-              <ListFilter className="h-6 w-6" />
+            <div className="flex items-center justify-center gap-2 text-xl font-semibold text-foreground">
+              <ListFilter className="h-6 w-6 text-primary" />
               <h2>自定义单词表</h2>
             </div>
 
-            <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white">
+            <Button className="w-full">
               <span className="mr-2">+</span> 创建新词书
             </Button>
 
-            <p className="text-center text-slate-400 text-sm">您还没有创建自定义词书，点击上方按钮创建</p>
+            <p className="text-center text-muted-foreground text-sm">您还没有创建自定义词书，点击上方按钮创建</p>
           </CardContent>
         </Card>
       </div>
 
-      <footer className="mt-8 text-center text-sm text-slate-500">
+      <footer className="mt-8 text-center text-sm text-muted-foreground">
         思考 · 反馈 · 关于 | VocabMaster all rights reserved.
       </footer>
     </div>
