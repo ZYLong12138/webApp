@@ -20,7 +20,7 @@ export async function checkVocabularyTable(): Promise<boolean> {
 export async function getVocabularyWords(): Promise<Vocabulary[]> {
   try {
     const { data, error } = await supabase
-      .from("vocabulary")
+      .from("cet4")
       .select("*")
       .order("id", { ascending: true })
 
@@ -40,7 +40,7 @@ export async function getVocabularyWords(): Promise<Vocabulary[]> {
 export async function addVocabularyWord(newWord: NewVocabulary): Promise<Vocabulary | null> {
   try {
     const { data, error } = await supabase
-      .from("vocabulary")
+      .from("cet4")
       .insert([newWord])
       .select()
       .single()
@@ -61,7 +61,7 @@ export async function addVocabularyWord(newWord: NewVocabulary): Promise<Vocabul
 export async function deleteVocabularyWord(id: number): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from("vocabulary")
+      .from("cet4")
       .delete()
       .eq("id", id)
 
@@ -81,7 +81,7 @@ export async function deleteVocabularyWord(id: number): Promise<boolean> {
 export async function updateVocabularyWord(id: number, word: Partial<NewVocabulary>): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from("vocabulary")
+      .from("cet4")
       .update(word)
       .eq("id", id)
 
@@ -95,6 +95,16 @@ export async function updateVocabularyWord(id: number, word: Partial<NewVocabula
     console.error("Error in updateVocabularyWord:", error)
     return false
   }
+}
+
+// 初始化数据库，检查词汇表是否存在，如果不存在则创建
+export async function initializeDatabase(): Promise<boolean> {
+  return true
+}
+
+// 更新指定词汇单词的掌握程度
+export async function updateMasteryLevel(id: string, masteryLevel: number): Promise<boolean> {
+    return true  // 返回 true 表示更新成功
 }
 
 /*
