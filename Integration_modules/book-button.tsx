@@ -44,19 +44,19 @@ export function BookButton({
 
   return (
     <div
-      className="bg-slate-700 rounded-lg p-4 flex justify-between items-center cursor-pointer hover:bg-slate-600 transition-colors"
+      className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
       onClick={handleClick}
     >
       <div className="flex items-start gap-3">
         {Icon && (
-          <div className="text-slate-300 mt-1">
+          <div className="text-blue-600 mt-1">
             <Icon className="h-5 w-5" />
           </div>
         )}
         <div>
-          <h3 className="font-medium text-white">{title}</h3>
-          <p className="text-sm text-slate-400">词汇量 {wordCount}</p>
-          <p className="text-sm text-slate-400">{description}</p>
+          <h3 className="font-medium text-gray-800">{title}</h3>
+          <p className="text-sm text-gray-500">词汇量 {wordCount}</p>
+          <p className="text-sm text-gray-500">{description}</p>
         </div>
       </div>
       <div className={`${tagColor} text-white px-3 py-1 rounded-md whitespace-nowrap`}>{tagText || "词书"}</div>
