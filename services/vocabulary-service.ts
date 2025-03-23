@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase" // 导入 supabase 客户端实例，用于与 Supabase 进行交互
-import type { Vocabulary, NewVocabulary } from "@/types/vocabulary" // 导入词汇类型定义
+import type { VocabularyWord, NewVocabularyWord } from "@/types/vocabulary" // 导入词汇类型定义
 
 // 检查词汇表是否存在
 export async function checkVocabularyTable(): Promise<boolean> {
@@ -17,7 +17,7 @@ export async function checkVocabularyTable(): Promise<boolean> {
 }
 
 // 获取所有词汇
-export async function getVocabularyWords(): Promise<Vocabulary[]> {
+export async function getVocabularyWords(): Promise<VocabularyWord[]> {
   try {
     const { data, error } = await supabase
       .from("cet4")
@@ -37,7 +37,7 @@ export async function getVocabularyWords(): Promise<Vocabulary[]> {
 }
 
 // 添加新词汇
-export async function addVocabularyWord(newWord: NewVocabulary): Promise<Vocabulary | null> {
+export async function addVocabularyWord(newWord: NewVocabularyWord): Promise<VocabularyWord | null> {
   try {
     const { data, error } = await supabase
       .from("cet4")
@@ -78,7 +78,7 @@ export async function deleteVocabularyWord(id: number): Promise<boolean> {
 }
 
 // 更新词汇
-export async function updateVocabularyWord(id: number, word: Partial<NewVocabulary>): Promise<boolean> {
+export async function updateVocabularyWord(id: number, word: Partial<NewVocabularyWord>): Promise<boolean> {
   try {
     const { error } = await supabase
       .from("cet4")
