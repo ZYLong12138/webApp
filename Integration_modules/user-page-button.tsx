@@ -9,6 +9,7 @@ import { User, UserCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { signInWithEmail, signUpWithEmail } from "@/services/auth-service"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface UserPageButtonProps {
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
@@ -41,50 +43,131 @@ export function UserPageButton({
   const { toast } = useToast()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [open, setOpen] = useState(false)
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const [loginForm, setLoginForm] = useState({
-    username: "",
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeTab, setActiveTab] = useState("login")
+  const [formData, setFormData] = useState({
+    email: "",
     password: "",
+    confirmPassword: "",
   })
+  const [userData, setUserData] = useState<{
+    email: string
+    name?: string
+  } | null>(null)
 
-  // 检查用户是否已登录（从localStorage读取状态）
+  // 检查用户是否已登录
   useEffect(() => {
-    const loginStatus = localStorage.getItem("isLoggedIn")
-    if (loginStatus === "true") {
-      setIsLoggedIn(true)
+    const checkLoginStatus = () => {
+      const userDataStr = localStorage.getItem("userData")
+      if (userDataStr) {
+        try {
+          const userData = JSON.parse(userDataStr)
+          setUserData(userData)
+          setIsLoggedIn(true)
+        } catch (error) {
+          console.error("Failed to parse user data:", error)
+          localStorage.removeItem("userData")
+        }
+      }
     }
+
+    checkLoginStatus()
   }, [])
 
-  // 处理登录表单输入变化
+  // 处理表单输入变化
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setLoginForm((prev) => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: value,
     }))
   }
 
   // 处理登录提交
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoggingIn(true)
+    setIsSubmitting(true)
 
-    // 模拟登录过程（延迟以模拟网络请求）
-    setTimeout(() => {
-      // 无论输入什么都视为登录成功
-      localStorage.setItem("isLoggedIn", "true")
-      localStorage.setItem("username", loginForm.username || "用户")
-      setIsLoggedIn(true)
-      setOpen(false)
+    try {
+      const { email, password } = formData
+      const result = await signInWithEmail(email, password)
 
+      if (result.success) {
+        // 保存用户数据到本地存储
+        const userData = {
+          email,
+          name: email.split("@")[0], // 使用邮箱前缀作为默认名称
+          ...result.data?.user,
+        }
+        localStorage.setItem("userData", JSON.stringify(userData))
+        setUserData(userData)
+        setIsLoggedIn(true)
+        setOpen(false)
+
+        toast({
+          title: "登录成功",
+          description: `欢迎回来，${userData.name || "用户"}！`,
+        })
+      } else {
+        toast({
+          title: "登录失败",
+          description: result.message || "邮箱或密码错误",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
       toast({
-        title: "登录成功",
-        description: `欢迎回来，${loginForm.username || "用户"}！`,
+        title: "登录失败",
+        description: "发生错误，请稍后再试",
+        variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
-      setIsLoggingIn(false)
-      setLoginForm({ username: "", password: "" })
-    }, 1000)
+  // 处理注册提交
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // 验证密码
+    if (formData.password !== formData.confirmPassword) {
+      toast({
+        title: "密码不匹配",
+        description: "请确保两次输入的密码相同",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const { email, password } = formData
+      const result = await signUpWithEmail(email, password)
+
+      if (result.success) {
+        toast({
+          title: "注册成功",
+          description: result.message || "请查收邮箱完成注册",
+        })
+        setActiveTab("login") // 切换到登录选项卡
+      } else {
+        toast({
+          title: "注册失败",
+          description: result.message || "注册过程中发生错误",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "注册失败",
+        description: "发生错误，请稍后再试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // 处理按钮点击
@@ -116,43 +199,102 @@ export function UserPageButton({
         {size !== "icon" && buttonText}
       </Button>
 
-      {/* 登录对话框 */}
+      {/* 登录/注册对话框 */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>用户登录</DialogTitle>
-            <DialogDescription>请输入您的账号和密码登录系统。</DialogDescription>
+            <DialogTitle>用户账户</DialogTitle>
+            <DialogDescription>登录或注册以访问更多功能。</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleLogin}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="username">用户名</Label>
-                <Input
-                  id="username"
-                  name="username"
-                  value={loginForm.username}
-                  onChange={handleInputChange}
-                  placeholder="请输入用户名"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">密码</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={loginForm.password}
-                  onChange={handleInputChange}
-                  placeholder="请输入密码"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={isLoggingIn}>
-                {isLoggingIn ? "登录中..." : "登录"}
-              </Button>
-            </DialogFooter>
-          </form>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">登录</TabsTrigger>
+              <TabsTrigger value="register">注册</TabsTrigger>
+            </TabsList>
+
+            {/* 登录表单 */}
+            <TabsContent value="login">
+              <form onSubmit={handleLogin} className="space-y-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">邮箱</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="请输入邮箱"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">密码</Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="请输入密码"
+                  />
+                </div>
+                <DialogFooter className="mt-4">
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "登录中..." : "登录"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+
+            {/* 注册表单 */}
+            <TabsContent value="register">
+              <form onSubmit={handleSignUp} className="space-y-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="register-email">邮箱</Label>
+                  <Input
+                    id="register-email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="请输入邮箱"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="register-password">密码</Label>
+                  <Input
+                    id="register-password"
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="请输入密码"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="confirm-password">确认密码</Label>
+                  <Input
+                    id="confirm-password"
+                    name="confirmPassword"
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="请再次输入密码"
+                  />
+                </div>
+                <DialogFooter className="mt-4">
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "注册中..." : "注册"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </>

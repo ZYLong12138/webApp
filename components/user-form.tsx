@@ -6,19 +6,22 @@ import { BookOpen, Calendar, Star, Trophy } from "lucide-react"
 
 // Define the props interface for the UserForm component
 interface UserFormProps {
-  username: string
-  avatarUrl?: string
-  isMember: boolean
-  currentBook?: {
-    id: string
-    title: string
-    wordCount: number
+  userData: {
+    email: string
+    name?: string
+    avatarUrl?: string
+    isMember?: boolean
+    currentBook?: {
+      id: string
+      title: string
+      wordCount: number
+    }
+    streakDays?: number
+    joinDate?: string
   }
-  streakDays: number
-  joinDate: string
 }
 
-export function UserForm({ username, avatarUrl, isMember, currentBook, streakDays, joinDate }: UserFormProps) {
+export function UserForm({ userData }: UserFormProps) {
   // Get user initials for avatar fallback
   const getInitials = (name: string) => {
     return name
@@ -28,15 +31,26 @@ export function UserForm({ username, avatarUrl, isMember, currentBook, streakDay
       .toUpperCase()
   }
 
+  // 使用默认值，以防某些属性不存在
+  const {
+    name = userData.email?.split("@")[0] || "用户",
+    avatarUrl,
+    isMember = false,
+    currentBook,
+    streakDays = 0,
+    joinDate = new Date().toLocaleDateString("zh-CN"),
+  } = userData
+
   return (
     <Card className="w-full">
       <CardHeader className="pb-0">
         <div className="flex flex-col items-center">
           <Avatar className="h-24 w-24 mb-4">
-            <AvatarImage src={avatarUrl} alt={username} />
-            <AvatarFallback className="text-2xl bg-blue-100 text-blue-600">{getInitials(username)}</AvatarFallback>
+            <AvatarImage src={avatarUrl} alt={name} />
+            <AvatarFallback className="text-2xl bg-blue-100 text-blue-600">{getInitials(name)}</AvatarFallback>
           </Avatar>
-          <CardTitle className="text-2xl font-bold text-center">{username}</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">{name}</CardTitle>
+          <div className="mt-2 text-sm text-gray-500">{userData.email}</div>
           <div className="mt-2">
             {isMember ? (
               <Badge className="bg-yellow-500 hover:bg-yellow-600">

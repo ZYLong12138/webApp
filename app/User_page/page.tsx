@@ -10,26 +10,38 @@ import { useToast } from "@/hooks/use-toast"
 export default function UserPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const [username, setUsername] = useState("用户")
+  const [userData, setUserData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // 从localStorage获取用户名
+  // 从localStorage获取用户数据
   useEffect(() => {
-    const storedUsername = localStorage.getItem("username")
-    if (storedUsername) {
-      setUsername(storedUsername)
+    const getUserData = () => {
+      setIsLoading(true)
+      const userDataStr = localStorage.getItem("userData")
+
+      if (userDataStr) {
+        try {
+          const parsedUserData = JSON.parse(userDataStr)
+          setUserData(parsedUserData)
+        } catch (error) {
+          console.error("Failed to parse user data:", error)
+          localStorage.removeItem("userData")
+          router.push("/")
+        }
+      } else {
+        // 未登录，重定向到首页
+        router.push("/")
+      }
+
+      setIsLoading(false)
     }
 
-    // 检查用户是否已登录，如果未登录则重定向到首页
-    const isLoggedIn = localStorage.getItem("isLoggedIn")
-    if (isLoggedIn !== "true") {
-      router.push("/")
-    }
+    getUserData()
   }, [router])
 
   // 处理退出登录
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn")
-    localStorage.removeItem("username")
+    localStorage.removeItem("userData")
 
     toast({
       title: "已退出登录",
@@ -39,18 +51,28 @@ export default function UserPage() {
     router.push("/")
   }
 
-  // Mock user data - in a real app, this would come from an API or context
-  const userData = {
-    username: username,
-    avatarUrl: "/placeholder.svg?height=100&width=100",
-    isMember: true,
-    currentBook: {
-      id: "gre-vocab",
+  // 如果正在加载或没有用户数据，显示加载状态
+  if (isLoading || !userData) {
+    return (
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+          <p>加载中...</p>
+        </div>
+      </ThemeProvider>
+    )
+  }
+
+  // 扩展用户数据，添加默认值
+  const enhancedUserData = {
+    ...userData,
+    isMember: userData.isMember || false,
+    currentBook: userData.currentBook || {
+      id: "my-vocabulary",
       title: "我的单词本",
-      wordCount: 42,
+      wordCount: 0,
     },
-    streakDays: 7,
-    joinDate: "2023年3月15日",
+    streakDays: userData.streakDays || 0,
+    joinDate: userData.joinDate || new Date().toLocaleDateString("zh-CN"),
   }
 
   return (
@@ -72,14 +94,7 @@ export default function UserPage() {
           <h1 className="text-2xl font-bold mb-6 text-center">用户信息</h1>
 
           <div className="max-w-4xl mx-auto">
-            <UserForm
-              username={userData.username}
-              avatarUrl={userData.avatarUrl}
-              isMember={userData.isMember}
-              currentBook={userData.currentBook}
-              streakDays={userData.streakDays}
-              joinDate={userData.joinDate}
-            />
+            <UserForm userData={enhancedUserData} />
           </div>
 
           <div className="mt-8 flex justify-center">
