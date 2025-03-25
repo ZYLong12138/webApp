@@ -87,29 +87,27 @@ export default function ReviewCardPage() {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-      <div className="min-h-screen bg-gray-50 p-4">
-        {/* 顶部导航 */}
-        <div className="mb-4">
-          <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-            返回词书
-          </Button>
-        </div>
-
-        {/* 标题和控制按钮 */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">{title}</h1>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleShuffle} className="flex items-center gap-1">
-              <Shuffle className="h-4 w-4" />
+      <div className="min-h-screen bg-gray-50 p-2">
+        {/* 顶部导航和控制按钮 */}
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center">
+            <Button variant="ghost" size="sm" className="flex items-center gap-1 h-8" onClick={() => router.back()}>
+              <ArrowLeft className="h-3 w-3" />
+              返回
+            </Button>
+            <h1 className="text-lg font-bold ml-2">{title}</h1>
+          </div>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" onClick={handleShuffle} className="flex items-center gap-1 h-8 text-xs">
+              <Shuffle className="h-3 w-3" />
               随机
             </Button>
-            <Button variant="outline" size="sm" onClick={handleSort} className="flex items-center gap-1">
-              <SortAsc className="h-4 w-4" />
+            <Button variant="outline" size="sm" onClick={handleSort} className="flex items-center gap-1 h-8 text-xs">
+              <SortAsc className="h-3 w-3" />
               排序
             </Button>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md">
-              第 {currentPage} / {totalPages || 1} 页
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-xs">
+              {currentPage}/{totalPages || 1}
             </span>
           </div>
         </div>
@@ -129,47 +127,49 @@ export default function ReviewCardPage() {
         ) : (
           <>
             {/* 单词卡片网格 */}
-            <div className="grid grid-cols-5 gap-2 md:gap-4 mb-6">
+            <div className="grid grid-cols-10 gap-1 mb-4">
               {currentWords.map((word) => (
                 <div
                   key={word.id}
                   className={`
-                    aspect-[3/2] cursor-pointer rounded-md shadow-sm 
+                    aspect-[1/1] cursor-pointer rounded-sm shadow-sm 
                     transition-all duration-300 transform 
                     ${flippedCards.has(word.id) ? "bg-blue-100" : "bg-white hover:bg-gray-100"}
-                    flex items-center justify-center p-2 text-center
-                    border border-gray-200
+                    flex items-center justify-center p-1 text-center
+                    border border-gray-200 text-xs
                   `}
                   onClick={() => handleCardFlip(word.id)}
                 >
                   {flippedCards.has(word.id) ? (
-                    <div className="text-sm text-gray-700">{word.definition}</div>
+                    <div className="text-xs text-gray-700 line-clamp-3 overflow-hidden">{word.definition}</div>
                   ) : (
-                    <div className="font-medium">{word.word}</div>
+                    <div className="font-bold text-lg">{word.word}</div>
                   )}
                 </div>
               ))}
             </div>
 
             {/* 分页控制 */}
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-2 mt-2">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={goToPrevPage}
                 disabled={currentPage === 1}
-                className="flex items-center"
+                className="flex items-center h-8"
               >
-                <ArrowLeft className="h-4 w-4 mr-1" />
+                <ArrowLeft className="h-3 w-3 mr-1" />
                 上一页
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 onClick={goToNextPage}
                 disabled={currentPage === totalPages}
-                className="flex items-center"
+                className="flex items-center h-8"
               >
                 下一页
-                <ArrowRight className="h-4 w-4 ml-1" />
+                <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
           </>
