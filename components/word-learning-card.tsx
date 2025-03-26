@@ -169,7 +169,7 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
 
   if (isLoading) {
     return (
-      <div className="bg-slate-800 rounded-lg p-8 text-center text-white">
+      <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-800">
         <p>加载中...</p>
       </div>
     )
@@ -177,7 +177,7 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
 
   if (!learningManager || !currentTest) {
     return (
-      <div className="bg-slate-800 rounded-lg p-8 text-center text-white">
+      <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-800">
         <p className="mb-4">没有可学习的单词</p>
         <Button onClick={onComplete}>返回</Button>
       </div>
@@ -191,28 +191,28 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
     <div className="w-full">
       {/* 进度指示器 */}
       <div className="w-full mb-8">
-        <div className="flex justify-between mb-2 text-white">
+        <div className="flex justify-between mb-2 text-gray-800">
           <span>学习进度</span>
           <span>
             {progress.currentTestIndex} / {progress.totalTests} (完成单词: {progress.completedWords}/
             {progress.totalWords})
           </span>
         </div>
-        <Progress value={progressPercentage} className="h-2 bg-slate-700" />
+        <Progress value={progressPercentage} className="h-2 bg-gray-200" />
       </div>
 
       {/* 测试类型提示 */}
-      <div className="text-center text-white mb-4">
+      <div className="text-center text-gray-800 mb-4">
         <p>{getTestTypeDescription(currentTest.testType)}</p>
       </div>
 
       {/* 单词卡片 */}
-      <div className="bg-slate-800 rounded-lg p-8 w-full mb-8">
+      <div className="bg-white shadow-md rounded-lg p-8 w-full mb-8">
         {/* 根据测试类型显示不同内容 */}
         {currentTest.testType === TestType.WORD_TO_DEFINITION && (
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center">
-              <h2 className="text-3xl font-bold text-white mr-3">{currentTest.word}</h2>
+              <h2 className="text-3xl font-bold text-gray-800 mr-3">{currentTest.word}</h2>
               <div className="flex space-x-1">
                 <Star
                   className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
@@ -228,8 +228,8 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
                 />
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="rounded-full bg-slate-700" onClick={playPronunciation}>
-              <Volume2 className="h-5 w-5 text-white" />
+            <Button variant="ghost" size="icon" className="rounded-full bg-gray-200" onClick={playPronunciation}>
+              <Volume2 className="h-5 w-5 text-gray-800" />
               <span className="sr-only">播放发音</span>
             </Button>
           </div>
@@ -238,7 +238,7 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
         {currentTest.testType === TestType.DEFINITION_TO_WORD && (
           <div className="mb-6">
             <div className="flex items-center mb-2">
-              <h2 className="text-xl font-medium text-white mr-3">选择下列含义对应的单词:</h2>
+              <h2 className="text-xl font-medium text-gray-800 mr-3">选择下列含义对应的单词:</h2>
               <div className="flex space-x-1">
                 <Star
                   className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
@@ -254,14 +254,14 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
                 />
               </div>
             </div>
-            <p className="text-slate-300">{currentTest.definition}</p>
+            <p className="text-gray-600">{currentTest.definition}</p>
           </div>
         )}
 
         {currentTest.testType === TestType.AUDIO_TO_WORD && (
           <div className="flex flex-col items-center justify-center mb-6">
             <div className="flex items-center mb-4">
-              <h2 className="text-xl font-medium text-white mr-3">听发音选择正确的单词</h2>
+              <h2 className="text-xl font-medium text-gray-800 mr-3">听发音选择正确的单词</h2>
               <div className="flex space-x-1">
                 <Star
                   className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
@@ -280,10 +280,10 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
             <Button
               variant="outline"
               size="lg"
-              className="rounded-full bg-slate-700 hover:bg-slate-600 border-none"
+              className="rounded-full bg-gray-200 hover:bg-gray-300 border-none"
               onClick={playPronunciation}
             >
-              <Volume2 className="h-8 w-8 text-white" />
+              <Volume2 className="h-8 w-8 text-gray-800" />
               <span className="sr-only">播放发音</span>
             </Button>
           </div>
@@ -291,7 +291,7 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
 
         {/* 示例句子（如果有且是单词选意思类型） */}
         {currentTest.testType === TestType.WORD_TO_DEFINITION && currentTest.example && (
-          <div className="text-slate-400 mb-6 text-center italic">"{currentTest.example}"</div>
+          <div className="text-gray-500 mb-6 text-center italic">"{currentTest.example}"</div>
         )}
 
         {/* 选项网格 */}
@@ -304,7 +304,7 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
                   ? option.isCorrect
                     ? "bg-green-600 text-white"
                     : "bg-red-600 text-white"
-                  : "bg-slate-700 hover:bg-slate-600 text-white"
+                  : "bg-gray-200 hover:bg-gray-300 text-gray-800"
               } ${selectedOption !== null && option.isCorrect ? "ring-2 ring-green-500" : ""}`}
               onClick={() => handleOptionClick(option.isCorrect, index)}
               disabled={selectedOption !== null}

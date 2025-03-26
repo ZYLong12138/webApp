@@ -16,10 +16,10 @@ export default function LearnWordPage() {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <div className="min-h-screen bg-slate-900 flex flex-col">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* 顶部导航 */}
         <div className="p-4">
-          <Button variant="ghost" className="text-white flex items-center gap-2" onClick={() => router.back()}>
+          <Button variant="ghost" className="text-gray-800 flex items-center gap-2" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
             返回词书
           </Button>
