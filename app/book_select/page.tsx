@@ -1,25 +1,96 @@
 "use client"
 
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Book, ListFilter, BookOpen } from "lucide-react"
+import { Book, ListFilter, BookOpen, Search, Loader2 } from "lucide-react"
 import { BookButton, BookButtonGrid } from "@/Integration_modules/book-button"
 import { UserPageButton } from "@/Integration_modules/user-page-button"
+import { getAllBooks, getBookWordCount } from "@/services/vocabulary-service"
+import type { VocabularyBook } from "@/types/vocabulary"
 
 export default function BookSelectPage() {
+  const [books, setBooks] = useState<VocabularyBook[]>([])
+  const [filteredBooks, setFilteredBooks] = useState<VocabularyBook[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [bookWordCounts, setBookWordCounts] = useState<Record<string, number>>({})
+
+  // 获取词书列表
+  useEffect(() => {
+    const fetchBooks = async () => {
+      setIsLoading(true)
+      try {
+        const data = await getAllBooks()
+        setBooks(data)
+        setFilteredBooks(data)
+
+        // 获取每本词书的单词数量
+        try {
+          const counts: Record<string, number> = {}
+          for (const book of data) {
+            try {
+              const count = await getBookWordCount(book.id)
+              counts[book.id] = count
+            } catch (countError) {
+              console.error(`获取词书 ${book.id} 单词数量失败:`, countError)
+              counts[book.id] = 0
+            }
+          }
+          setBookWordCounts(counts)
+        } catch (countError) {
+          console.error("获取词书单词数量失败:", countError)
+          // 如果获取单词数量失败，使用空对象
+          setBookWordCounts({})
+        }
+
+        setError(null)
+      } catch (err) {
+        console.error("获取词书失败:", err)
+        setError("加载词书列表时出现错误")
+        setBooks([])
+        setFilteredBooks([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchBooks()
+  }, [])
+
+  // 处理搜索
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredBooks(books)
+    } else {
+      const filtered = books.filter(
+        (book) =>
+          book.book_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          book.description.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+      setFilteredBooks(filtered)
+    }
+  }, [searchQuery, books])
+
+  // 处理搜索输入
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+  }
+
   return (
     <div className="container mx-auto py-8 max-w-6xl bg-gray-50 min-h-screen">
-      {/* Add header with user button */}
+      {/* 头部与用户按钮 */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">VocabMaster</h1>
         <UserPageButton size="icon" buttonText="" variant="ghost" />
       </div>
 
-      {/* Remove the existing h1 since we've moved it to the header */}
-
       <div className="space-y-8">
-        {/* Standard Vocabulary Data Section */}
+        {/* 标准词汇数据部分 */}
         <Card className="bg-white shadow-sm border">
           <CardContent className="p-6 space-y-6">
             <div className="flex items-center justify-center gap-2 text-xl font-semibold text-gray-800">
@@ -29,35 +100,64 @@ export default function BookSelectPage() {
 
             <div className="relative">
               <Input
-                className="bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400"
+                className="bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 pr-10"
                 placeholder="搜索词书..."
+                value={searchQuery}
+                onChange={handleSearchChange}
               />
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
 
-            {/* Add BookButton that connects to app/page */}
-            <BookButtonGrid>
-              <BookButton
-                id="my-vocabulary"
-                title="我的单词本"
-                wordCount={0}
-                description="您的个人词汇学习空间"
-                icon={BookOpen}
-                tagColor="bg-blue-500"
-                tagText="个人词库"
-                href="/word_list"
-              />
-            </BookButtonGrid>
+            {isLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                <span className="ml-2 text-gray-600">加载词书中...</span>
+              </div>
+            ) : error ? (
+              <div className="bg-red-50 text-red-600 p-4 rounded-md">
+                <p>{error}</p>
+              </div>
+            ) : (
+              <BookButtonGrid>
+                {/* 我的单词本按钮始终显示 */}
+                <BookButton
+                  id="my-vocabulary"
+                  title="我的单词本"
+                  wordCount={bookWordCounts["my-vocabulary"] || 0}
+                  description="您的个人词汇学习空间"
+                  icon={BookOpen}
+                  tagColor="bg-blue-500"
+                  tagText="个人词库"
+                  href="/word_list"
+                />
 
-            {/* Empty grid message - only show if there are no other books */}
-            {false && (
+                {/* 显示从后端获取的词书列表 */}
+                {filteredBooks.map((book) => (
+                  <BookButton
+                    key={book.id}
+                    id={book.id}
+                    title={book.book_name}
+                    wordCount={bookWordCounts[book.id] || 0}
+                    description={book.description}
+                    icon={Book}
+                    tagColor="bg-green-500"
+                    tagText="标准词库"
+                    href={`/book/${book.id}`}
+                  />
+                ))}
+              </BookButtonGrid>
+            )}
+
+            {/* 如果没有词书且不在加载状态，显示提示信息 */}
+            {!isLoading && !error && filteredBooks.length === 0 && (
               <div className="bg-gray-100 rounded-lg p-8 text-center">
-                <p className="text-gray-500">暂无标准词书数据</p>
+                <p className="text-gray-500">{searchQuery ? "没有找到匹配的词书" : "暂无标准词书数据"}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Custom Vocabulary Lists Section */}
+        {/* 自定义词汇列表部分 */}
         <Card className="bg-white shadow-sm border">
           <CardContent className="p-6 space-y-6">
             <div className="flex items-center justify-center gap-2 text-xl font-semibold text-gray-800">
