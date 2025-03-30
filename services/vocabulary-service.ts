@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import type { VocabularyWord, NewVocabularyWord } from "@/types/vocabulary"
 
-// 修改 checkVocabularyTables 函数，使用小写表名
+// 检查词汇表是否存在
 export async function checkVocabularyTables(): Promise<{
   wordListExists: boolean
   bookListExists: boolean
@@ -69,8 +69,8 @@ export async function getBookById(bookId: string) {
   }
 }
 
-// 获取所有词汇或特定词书的词汇
-export async function getVocabularyWords(bookId?: string): Promise<VocabularyWord[]> {
+// 获取所有词汇或特定词书的词汇，支持分页
+export async function getVocabularyWords(bookId?: string, page = 1, limit = 200): Promise<VocabularyWord[]> {
   try {
     // 获取当前用户ID
     const {
@@ -78,12 +78,17 @@ export async function getVocabularyWords(bookId?: string): Promise<VocabularyWor
     } = await supabase.auth.getUser()
     const userId = user?.id
 
+    // 计算分页的起始位置
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
     // 如果没有指定词书ID，直接获取所有单词
     if (!bookId || bookId === "my-vocabulary") {
       const { data: words, error: wordsError } = await supabase
         .from("word_list")
         .select("*")
         .order("id", { ascending: true })
+        .range(from, to)
 
       if (wordsError) {
         console.error("Error fetching vocabulary words:", wordsError)
@@ -111,11 +116,14 @@ export async function getVocabularyWords(bookId?: string): Promise<VocabularyWor
       // 如果词书中有单词，过滤word_list表
       if (mappingData && mappingData.length > 0) {
         const wordIds = mappingData.map((item) => item.word_id)
+
+        // 使用分页参数获取单词
         const { data: words, error: wordsError } = await supabase
           .from("word_list")
           .select("*")
           .in("id", wordIds)
           .order("id", { ascending: true })
+          .range(from, to)
 
         if (wordsError) {
           console.error("Error fetching vocabulary words:", wordsError)

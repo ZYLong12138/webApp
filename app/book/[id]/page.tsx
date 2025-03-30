@@ -10,6 +10,8 @@ import { VocabularyList } from "@/components/vocabulary-list"
 import { LearnWordButton } from "@/Integration_modules/learn-word-button"
 import { ReviewCardButton } from "@/Integration_modules/review-card-button"
 import type { VocabularyBook, VocabularyWord } from "@/types/vocabulary"
+import { ScrollButtons } from "@/Integration_modules/scroll-buttons"
+import { getBookWordCount } from "@/services/vocabulary-service"
 
 export default function BookPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -17,6 +19,7 @@ export default function BookPage({ params }: { params: { id: string } }) {
   const [words, setWords] = useState<VocabularyWord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [wordCount, setWordCount] = useState(0)
 
   // 获取词书信息和单词列表
   useEffect(() => {
@@ -36,11 +39,17 @@ export default function BookPage({ params }: { params: { id: string } }) {
         try {
           const wordsData = await getVocabularyWords(params.id)
           setWords(wordsData)
+
+          // 获取词书的单词数量
+          const count = await getBookWordCount(params.id)
+          setWordCount(count)
+
           setError(null)
         } catch (err) {
           console.error("获取词书单词失败:", err)
           // 即使获取单词失败，仍然显示词书信息
           setWords([])
+          setWordCount(0)
           setError("无法加载词书中的单词，但您仍然可以查看词书信息")
         }
       } catch (err) {
@@ -103,12 +112,12 @@ export default function BookPage({ params }: { params: { id: string } }) {
                 <p className="text-gray-600">{book.description}</p>
                 <div className="flex items-center justify-center mt-4">
                   <BookOpen className="h-5 w-5 text-blue-600 mr-2" />
-                  <span className="text-gray-700">词汇量: {words.length}</span>
+                  <span className="text-gray-700">词汇量: {wordCount}</span>
                 </div>
               </div>
 
               {/* 单词列表 */}
-              <VocabularyList words={words} onWordDeleted={handleWordDeleted} />
+              <VocabularyList words={words} onWordDeleted={handleWordDeleted} bookId={params.id} />
             </>
           ) : (
             <div className="text-center py-16">
@@ -119,6 +128,8 @@ export default function BookPage({ params }: { params: { id: string } }) {
             </div>
           )}
         </div>
+        {/* 添加滚动按钮 */}
+        <ScrollButtons />
       </div>
     </ThemeProvider>
   )

@@ -18,6 +18,9 @@ import { LearnWordButton } from "@/Integration_modules/learn-word-button"
 // Add this new import for ReviewCardButton
 import { ReviewCardButton } from "@/Integration_modules/review-card-button"
 
+// 在导入部分添加以下内容
+import { ScrollButtons } from "@/Integration_modules/scroll-buttons"
+
 export default function WordListPage() {
   // Initialize the router
   const router = useRouter()
@@ -47,7 +50,7 @@ export default function WordListPage() {
           </div>
         </div>
         {/* VocabularyDashboard 组件，用于显示和管理词汇学习内容 */}
-        <VocabularyDashboard />
+        <VocabularyDashboard bookId="my-vocabulary" />
         {/* Fixed position Quick Add Word button */}
         <div className="fixed bottom-6 right-6">
           <QuickAddWordButton
@@ -59,6 +62,8 @@ export default function WordListPage() {
             }}
           />
         </div>
+        {/* 添加滚动按钮 */}
+        <ScrollButtons />
       </main>
     </ThemeProvider>
   )
