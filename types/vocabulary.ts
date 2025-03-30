@@ -3,7 +3,7 @@ export interface VocabularyWord {
   id: number;           // int8 类型
   words: string;        // text 类型
   pronunciation: string; // text 类型
-  mainMeaning: number;  // text 类型
+  MainMeaning: string;  // text 类型
   translation: string;  // text 类型
 }
 
@@ -11,7 +11,7 @@ export interface VocabularyWord {
 export interface NewVocabularyWord {
   words: string;
   pronunciation: string;
-  mainMeaning: number;
+  mainMeaning: string;
   translation: string;
 }
 

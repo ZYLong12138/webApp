@@ -102,8 +102,13 @@ export async function initializeDatabase(): Promise<boolean> {
   return true
 }
 
-// 更新指定词汇单词的掌握程度
-export async function updateMasteryLevel(id: string, masteryLevel: number): Promise<boolean> {
+// 获取指定词汇单词的掌握程度
+export async function getMasteryLevel(id: string): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from("cet4")
+      .select("mastery_level")
+      .eq("id", id)
     return true  // 返回 true 表示更新成功
 }
 
