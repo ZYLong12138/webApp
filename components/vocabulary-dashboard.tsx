@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs" 
 import { AddWordForm } from "./add-word-form" // 导入添加单词的表单组件
 import { VocabularyList } from "./vocabulary-list" // 导入显示单词列表的组件
 import { ReviewSession } from "./review-session" // 导入复习会话组件
-import { getVocabularyWords, initializeDatabase } from "@/services/vocabulary-service" // 导入数据库操作服务，获取单词和初始化数据库
+import { getVocabularyWords, initializeDatabase } from "@/services/vocabulary-service" // 导入数据库操  // 导入复习会话组件
 import type { VocabularyWord } from "@/types/vocabulary" // 导入单词类型定义
 import { useToast } from "@/hooks/use-toast" // 导入自定义的 toast 通知钩子
 import { Alert, AlertDescription } from "@/components/ui/alert" // 导入警告框组件
@@ -13,8 +13,13 @@ import { AlertCircle, RefreshCw } from "lucide-react" // 导入图标
 import { Button } from "@/components/ui/button" // 导入按钮组件
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card" // 导入卡片组件
 
+// 定义 VocabularyDashboard 组件的props
+interface VocabularyDashboardProps {
+  bookId?: string // 可选的词书ID
+}
+
 // 定义 VocabularyDashboard 组件
-export function VocabularyDashboard() {
+export function VocabularyDashboard({ bookId = "my-vocabulary" }: VocabularyDashboardProps) {
   const { toast } = useToast() // 使用自定义的 toast 提示功能
   const [words, setWords] = useState<VocabularyWord[]>([]) // 存储单词数据的状态
   const [isLoading, setIsLoading] = useState(true) // 存储加载状态的状态
@@ -44,16 +49,17 @@ export function VocabularyDashboard() {
     } catch (err) {
       console.error("Error initializing app:", err)
       // 捕获异常并设置错误信息
-      setError("初始化应用程序时出错。请刷新页面重��。")
+      setError("初始化应用程序时出错。请刷新页面重试。")
       setIsLoading(false)
     }
   }
 
-  // 获取单词数据的函数
+  // 获取单词数据的函数 - 仅用于复习功能
   const fetchWords = async () => {
     setIsLoading(true) // 设置加载状态为 true
     try {
-      const data = await getVocabularyWords() // 从数据库获取单词数据
+      // 获取所有单词用于复习功能
+      const data = await getVocabularyWords(bookId)
       setWords(data) // 更新单词数据
       setError(null) // 重置错误信息
     } catch (err) {
@@ -78,7 +84,7 @@ export function VocabularyDashboard() {
 
   // 单词删除后的回调
   const handleWordDeleted = () => {
-    fetchWords() // 重新获取单词列表
+    fetchWords() // 重新获取单词列表用于复习功能
   }
 
   // 复习完成后的回调
@@ -109,21 +115,8 @@ export function VocabularyDashboard() {
                 <p className="font-medium mb-2">可能的解决方案：</p>
                 <ol className="list-decimal pl-5 space-y-2">
                   <li>确保您的 Supabase 项目已正确设置，并且环境变量正确配置。</li>
-                  <li>
-                    您可能需要手动创建数据库表。请登录 Supabase 控制台，打开 SQL 编辑器，并运行以下代码：
-                    <pre className="bg-background p-2 rounded mt-2 overflow-x-auto text-xs">
-                      {`CREATE TABLE IF NOT EXISTS vocabulary_words (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  word TEXT NOT NULL,
-  definition TEXT NOT NULL,
-  example TEXT,
-  mastery_level INTEGER NOT NULL DEFAULT 0,
-  last_reviewed TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);`}
-                    </pre>
-                  </li>
                   <li>检查您的 Supabase 权限设置，确保应用程序有权访问和修改数据库。</li>
+                  <li>确保数据库中存在名为 "cet4" 的表。</li>
                 </ol>
               </div>
             )}
@@ -153,21 +146,17 @@ export function VocabularyDashboard() {
 
         {/* 列出所有单词 */}
         <TabsContent value="list">
-          {isLoading ? (
-            <div className="text-center py-8">加载中...</div> // 加载状态
-          ) : (
-            <VocabularyList words={words} onWordDeleted={handleWordDeleted} /> // 显示单词列表
-          )}
+          <VocabularyList onWordDeleted={handleWordDeleted} bookId={bookId} />
         </TabsContent>
 
         {/* 添加单词表单 */}
         <TabsContent value="add">
-          <AddWordForm onWordAdded={handleWordAdded} /> // 添加单词表单
+          <AddWordForm onWordAdded={handleWordAdded} />
         </TabsContent>
 
         {/* 复习单词 */}
         <TabsContent value="review">
-          <ReviewSession words={words} onComplete={handleReviewComplete} onMasteryUpdated={fetchWords} /> // 复习单词会话
+          <ReviewSession words={words} onComplete={handleReviewComplete} onMasteryUpdated={fetchWords} />
         </TabsContent>
       </Tabs>
     </div>
@@ -176,7 +165,7 @@ export function VocabularyDashboard() {
 /*
 主要功能解释：
 初始化应用程序：包括初始化数据库和加载单词。
-Tab 切换：使用 Tabs 组件切换“单词列表”、“添加单词”和“复习单词”视图。
+Tab 切换：使用 Tabs 组件切换"单词列表"、"添加单词"和"复习单词"视图。
 错误处理：如果出现错误（如数据库无法初始化或加载失败），提供用户友好的错误提示并显示可能的解决方案。
 加载状态：使用 isLoading 状态来显示加载进度。
 复习和管理单词：提供添加、删除单词和复习功能，并通过 useState 更新 UI 状态。
