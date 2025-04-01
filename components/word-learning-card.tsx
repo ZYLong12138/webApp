@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-// 在 import 部分添加 Star 图标
 import { Volume2, Check, X, Star } from "lucide-react"
-// 导入学习管理器和相关类型
 import { LearningManager, TestType } from "../algorithm/learning"
-import { getVocabularyWords, updateMasteryLevel } from "../services/vocabulary-service"
+import { getVocabularyWords, updateMasteryLevel, getMasteryLevel } from "../services/vocabulary-service"
+import { useToast } from "@/hooks/use-toast"
 
 interface WordLearningCardProps {
   onComplete: () => void // 学习完成后的回调
@@ -16,13 +15,13 @@ interface WordLearningCardProps {
 }
 
 export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: WordLearningCardProps) {
+  const { toast } = useToast()
   const [learningManager, setLearningManager] = useState<LearningManager | null>(null)
   const [currentTest, setCurrentTest] = useState<any>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [progress, setProgress] = useState({ totalWords: 0, completedWords: 0, currentTestIndex: 0, totalTests: 0 })
-  // 在 WordLearningCard 组件中添加一个新的状态来跟踪当前单词的测试通过状态
   const [currentWordStatus, setCurrentWordStatus] = useState<{
     [TestType.WORD_TO_DEFINITION]: boolean
     [TestType.DEFINITION_TO_WORD]: boolean
@@ -32,6 +31,8 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
     [TestType.DEFINITION_TO_WORD]: false,
     [TestType.AUDIO_TO_WORD]: false,
   })
+  // 添加一个状态来跟踪当前单词的熟练度
+  const [wordMasteryLevels, setWordMasteryLevels] = useState<Record<string, number>>({})
 
   // 获取单词数据并初始化学习管理器
   useEffect(() => {
@@ -39,12 +40,9 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
       setIsLoading(true)
       try {
         const data = await getVocabularyWords()
-        // 如果提供了bookId，可以在这里过滤单词
-        // const filteredData = bookId ? data.filter(word => word.book_id === bookId) : data;
 
-        // 随机打乱单词顺序并限制数量
-        const shuffled = [...data].sort(() => Math.random() - 0.5)
-        const learningWords = shuffled.slice(0, Math.min(maxWordsToLearn, data.length))
+        // 按照词表顺序提取单词
+        const learningWords = data.slice(0, Math.min(maxWordsToLearn, data.length))
 
         // 初始化学习管理器
         const manager = new LearningManager(learningWords)
@@ -56,6 +54,19 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
 
         // 更新进度
         setProgress(manager.getProgress())
+
+        // 获取所有学习单词的熟练度
+        const masteryLevels: Record<string, number> = {}
+        for (const word of learningWords) {
+          try {
+            const level = await getMasteryLevel(word.id)
+            masteryLevels[word.id] = level
+          } catch (error) {
+            console.error(`获取单词 ${word.id} 熟练度失败:`, error)
+            masteryLevels[word.id] = 0
+          }
+        }
+        setWordMasteryLevels(masteryLevels)
       } catch (error) {
         console.error("获取单词失败:", error)
       } finally {
@@ -77,15 +88,61 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
     }
   }, [learningManager, currentTest])
 
-  // 修改 handleOptionClick 函数，确保正确记录用户的选择并实时点亮星星
+  // 更新熟练度的函数
+  const updateWordMastery = async (wordId: string, isCorrect: boolean) => {
+    try {
+      // 获取当前熟练度
+      const currentLevel = wordMasteryLevels[wordId] || 0
+
+      // 根据回答正确与否更新熟练度
+      let newLevel = currentLevel
+      if (isCorrect) {
+        // 答对了，熟练度加1，上限为5
+        newLevel = Math.min(5, currentLevel + 1)
+      } else {
+        // 答错了，熟练度减1，下限为-5
+        newLevel = Math.max(-5, currentLevel - 1)
+      }
+
+      // 如果熟练度有变化，更新数据库
+      if (newLevel !== currentLevel) {
+        await updateMasteryLevel(wordId, newLevel)
+
+        // 更新本地状态
+        setWordMasteryLevels((prev) => ({
+          ...prev,
+          [wordId]: newLevel,
+        }))
+
+        // 显示提示
+        toast({
+          title: isCorrect ? "熟练度提升" : "熟练度下降",
+          description: `单词熟练度已更新为 ${newLevel}`,
+          variant: isCorrect ? "default" : "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("更新熟练度失败:", error)
+      toast({
+        title: "更新失败",
+        description: "更新单词熟练度时出现错误",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // 修改 handleOptionClick 函数，确保正确记录用户的选择并更新熟练度
   const handleOptionClick = (isCorrect: boolean, index: number) => {
-    if (selectedOption !== null || !learningManager) return // 已经选择了选项，不允许再次选择
+    if (selectedOption !== null || !learningManager || !currentTest) return // 已经选择了选项，不允许再次选择
 
     setSelectedOption(index)
     setIsCorrect(isCorrect)
 
+    // 更新熟练度
+    updateWordMastery(currentTest.wordId, isCorrect)
+
     // 如果回答正确，立即更新当前单词的测试通过状态
-    if (isCorrect && currentTest) {
+    if (isCorrect) {
       setCurrentWordStatus((prevStatus) => ({
         ...prevStatus,
         [currentTest.testType]: true,
@@ -117,12 +174,23 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
     }
   }
 
-  // 处理"已掌握"按钮点击
+  // 处理"已掌握"按钮点击 - 直接设置为最高熟练度
   const handleMastered = async () => {
     if (currentTest) {
       try {
-        // 更新掌握程度为3（熟悉）
-        await updateMasteryLevel(currentTest.wordId, 3)
+        // 更新掌握程度为5（完全掌握）
+        await updateMasteryLevel(currentTest.wordId, 5)
+
+        // 更新本地状态
+        setWordMasteryLevels((prev) => ({
+          ...prev,
+          [currentTest.wordId]: 5,
+        }))
+
+        toast({
+          title: "已标记为掌握",
+          description: "单词熟练度已设置为最高级别",
+        })
       } catch (error) {
         console.error("更新掌握程度失败:", error)
       }
@@ -130,12 +198,23 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
     handleNextWord()
   }
 
-  // 处理"需要复习"按钮点击
+  // 处理"需要复习"按钮点击 - 设置为较低熟练度
   const handleNeedReview = async () => {
     if (currentTest) {
       try {
-        // 更新掌握程度为1（有印象）
-        await updateMasteryLevel(currentTest.wordId, 1)
+        // 更新掌握程度为-3（需要重点复习）
+        await updateMasteryLevel(currentTest.wordId, -3)
+
+        // 更新本地状态
+        setWordMasteryLevels((prev) => ({
+          ...prev,
+          [currentTest.wordId]: -3,
+        }))
+
+        toast({
+          title: "已标记为需要复习",
+          description: "单词已添加到重点复习列表",
+        })
       } catch (error) {
         console.error("更新掌握程度失败:", error)
       }
@@ -165,6 +244,28 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
       default:
         return ""
     }
+  }
+
+  // 获取熟练度显示文本
+  const getMasteryLevelText = (wordId: string) => {
+    const level = wordMasteryLevels[wordId] || 0
+
+    if (level >= 4) return "精通"
+    if (level >= 2) return "熟悉"
+    if (level >= 0) return "学习中"
+    if (level >= -3) return "需复习"
+    return "困难"
+  }
+
+  // 获取熟练度显示颜色
+  const getMasteryLevelColor = (wordId: string) => {
+    const level = wordMasteryLevels[wordId] || 0
+
+    if (level >= 4) return "text-green-600"
+    if (level >= 2) return "text-blue-600"
+    if (level >= 0) return "text-gray-600"
+    if (level >= -3) return "text-orange-600"
+    return "text-red-600"
   }
 
   if (isLoading) {
@@ -228,31 +329,43 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
                 />
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="rounded-full bg-gray-200" onClick={playPronunciation}>
-              <Volume2 className="h-5 w-5 text-gray-800" />
-              <span className="sr-only">播放发音</span>
-            </Button>
+            <div className="flex items-center gap-3">
+              {/* 显示当前单词的熟练度 */}
+              <span className={`text-sm font-medium ${getMasteryLevelColor(currentTest.wordId)}`}>
+                {getMasteryLevelText(currentTest.wordId)} ({wordMasteryLevels[currentTest.wordId] || 0})
+              </span>
+              <Button variant="ghost" size="icon" className="rounded-full bg-gray-200" onClick={playPronunciation}>
+                <Volume2 className="h-5 w-5 text-gray-800" />
+                <span className="sr-only">播放发音</span>
+              </Button>
+            </div>
           </div>
         )}
 
         {currentTest.testType === TestType.DEFINITION_TO_WORD && (
           <div className="mb-6">
-            <div className="flex items-center mb-2">
-              <h2 className="text-xl font-medium text-gray-800 mr-3">选择下列含义对应的单词:</h2>
-              <div className="flex space-x-1">
-                <Star
-                  className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
-                  data-testtype={TestType.WORD_TO_DEFINITION}
-                />
-                <Star
-                  className={`h-5 w-5 ${currentWordStatus[TestType.DEFINITION_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
-                  data-testtype={TestType.DEFINITION_TO_WORD}
-                />
-                <Star
-                  className={`h-5 w-5 ${currentWordStatus[TestType.AUDIO_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
-                  data-testtype={TestType.AUDIO_TO_WORD}
-                />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center">
+                <h2 className="text-xl font-medium text-gray-800 mr-3">选择下列含义对应的单词:</h2>
+                <div className="flex space-x-1">
+                  <Star
+                    className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
+                    data-testtype={TestType.WORD_TO_DEFINITION}
+                  />
+                  <Star
+                    className={`h-5 w-5 ${currentWordStatus[TestType.DEFINITION_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
+                    data-testtype={TestType.DEFINITION_TO_WORD}
+                  />
+                  <Star
+                    className={`h-5 w-5 ${currentWordStatus[TestType.AUDIO_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
+                    data-testtype={TestType.AUDIO_TO_WORD}
+                  />
+                </div>
               </div>
+              {/* 显示当前单词的熟练度 */}
+              <span className={`text-sm font-medium ${getMasteryLevelColor(currentTest.wordId)}`}>
+                {getMasteryLevelText(currentTest.wordId)} ({wordMasteryLevels[currentTest.wordId] || 0})
+              </span>
             </div>
             <p className="text-gray-600">{currentTest.definition}</p>
           </div>
@@ -260,22 +373,28 @@ export function WordLearningCard({ onComplete, maxWordsToLearn = 5, bookId }: Wo
 
         {currentTest.testType === TestType.AUDIO_TO_WORD && (
           <div className="flex flex-col items-center justify-center mb-6">
-            <div className="flex items-center mb-4">
-              <h2 className="text-xl font-medium text-gray-800 mr-3">听发音选择正确的单词</h2>
-              <div className="flex space-x-1">
-                <Star
-                  className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
-                  data-testtype={TestType.WORD_TO_DEFINITION}
-                />
-                <Star
-                  className={`h-5 w-5 ${currentWordStatus[TestType.DEFINITION_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
-                  data-testtype={TestType.DEFINITION_TO_WORD}
-                />
-                <Star
-                  className={`h-5 w-5 ${currentWordStatus[TestType.AUDIO_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
-                  data-testtype={TestType.AUDIO_TO_WORD}
-                />
+            <div className="flex items-center justify-between w-full mb-4">
+              <div className="flex items-center">
+                <h2 className="text-xl font-medium text-gray-800 mr-3">听发音选择正确的单词</h2>
+                <div className="flex space-x-1">
+                  <Star
+                    className={`h-5 w-5 ${currentWordStatus[TestType.WORD_TO_DEFINITION] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
+                    data-testtype={TestType.WORD_TO_DEFINITION}
+                  />
+                  <Star
+                    className={`h-5 w-5 ${currentWordStatus[TestType.DEFINITION_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
+                    data-testtype={TestType.DEFINITION_TO_WORD}
+                  />
+                  <Star
+                    className={`h-5 w-5 ${currentWordStatus[TestType.AUDIO_TO_WORD] ? "text-yellow-400 fill-yellow-400" : "text-gray-500"}`}
+                    data-testtype={TestType.AUDIO_TO_WORD}
+                  />
+                </div>
               </div>
+              {/* 显示当前单词的熟练度 */}
+              <span className={`text-sm font-medium ${getMasteryLevelColor(currentTest.wordId)}`}>
+                {getMasteryLevelText(currentTest.wordId)} ({wordMasteryLevels[currentTest.wordId] || 0})
+              </span>
             </div>
             <Button
               variant="outline"

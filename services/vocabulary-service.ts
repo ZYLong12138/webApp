@@ -394,28 +394,88 @@ export async function updateMasteryLevel(id: string | number, masteryLevel: numb
       return false
     }
 
-    // 使用upsert操作 - 如果记录存在则更新，不存在则插入
-    const { error } = await supabase.from("word_mastery").upsert(
-      {
-        word_id: id,
-        user_id: userId,
-        mastery_level: masteryLevel,
-        last_reviewed: new Date().toISOString(),
-      },
-      {
-        onConflict: "word_id,user_id", // 指定冲突检测的列
-      },
-    )
+    // 首先检查记录是否存在
+    const { data, error: checkError } = await supabase
+      .from("word_mastery")
+      .select("*")
+      .eq("word_id", id)
+      .eq("user_id", userId)
 
-    if (error) {
-      console.error("Error updating mastery level:", error)
-      throw error
+    if (checkError) {
+      console.error("Error checking existing mastery record:", checkError)
+      throw checkError
+    }
+
+    // 如果记录存在，则更新
+    if (data && data.length > 0) {
+      const { error: updateError } = await supabase
+        .from("word_mastery")
+        .update({ mastery_level: masteryLevel })
+        .eq("word_id", id)
+        .eq("user_id", userId)
+
+      if (updateError) {
+        console.error("Error updating mastery level:", updateError)
+        throw updateError
+      }
+    } else {
+      // 如果记录不存在，则插入
+      const { error: insertError } = await supabase.from("word_mastery").insert([
+        {
+          word_id: id,
+          user_id: userId,
+          mastery_level: masteryLevel,
+        },
+      ])
+
+      if (insertError) {
+        console.error("Error inserting mastery level:", insertError)
+        throw insertError
+      }
     }
 
     return true
   } catch (error) {
     console.error("Error in updateMasteryLevel:", error)
     return false
+  }
+}
+
+// 获取指定单词的熟练度
+export async function getMasteryLevel(id: string | number): Promise<number> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot get mastery level")
+      return 0
+    }
+
+    // 查询单词的熟练度
+    const { data, error } = await supabase
+      .from("word_mastery")
+      .select("mastery_level")
+      .eq("word_id", id)
+      .eq("user_id", userId)
+      .single()
+
+    if (error) {
+      // 如果是没有找到记录的错误，返回0
+      if (error.code === "PGRST116") {
+        return 0
+      }
+      console.error("Error getting mastery level:", error)
+      throw error
+    }
+
+    return data?.mastery_level || 0
+  } catch (error) {
+    console.error("Error in getMasteryLevel:", error)
+    return 0
   }
 }
 
