@@ -1,0 +1,147 @@
+/* 基础样式 - 适用于所有主题 */
+:root {
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --transition-speed: 0.3s;
+    --card-hover-bg: #f0f7ff;
+    --card-hover-border: #d1e0ff;
+    --card-hover-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  /* 简约主题 - 黑白 */
+  .theme-simple {
+    --background-color: #f8f9fa;
+    --card-bg: #ffffff;
+    --card-border: 1px solid #e5e7eb;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --accent-color: #3b82f6;
+    --accent-light: #dbeafe;
+    --success-color: #10b981;
+    --error-color: #ef4444;
+    --nav-bg: rgba(255, 255, 255, 0.9);
+    --nav-border: 1px solid #e5e7eb;
+  
+    /* 简约主题的悬停效果 */
+    --card-hover-bg: #f0f7ff;
+    --card-hover-border: #d1e0ff;
+    --card-hover-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  /* 黄昏玫瑰主题 */
+  .theme-dusk-rose {
+    --background-color: transparent; /* 使用渐变背景 */
+    --card-bg: rgba(255, 255, 255, 0.85);
+    --card-border: 1px solid rgba(255, 255, 255, 0.5);
+    --text-primary: #4b5563;
+    --text-secondary: #6b7280;
+    --accent-color: #a0b4ff;
+    --accent-light: #e8eeff;
+    --success-color: #34d399;
+    --error-color: #f87171;
+    --nav-bg: rgba(255, 255, 255, 0.9);
+    --nav-border: 1px solid rgba(229, 190, 239, 0.2);
+  
+    /* 黄昏玫瑰主题的悬停效果 */
+    --card-hover-bg: rgba(255, 255, 255, 0.95);
+    --card-hover-border: rgba(243, 152, 114, 0.3);
+    --card-hover-shadow: 0 6px 12px rgba(105, 127, 244, 0.15);
+  }
+  
+  /* 晨风茉莉主题 - 薄荷之夏配色 */
+  .theme-zephyr-jasmine {
+    --background-color: transparent; /* 使用渐变背景 */
+    --card-bg: rgba(255, 255, 255, 0.85);
+    --card-border: 1px solid rgba(174, 220, 170, 0.3); /* 浅薄荷绿边框 */
+    --text-primary: #2c3e50;
+    --text-secondary: #546e7a;
+    --accent-color: rgba(75, 195, 178, 0.6); /* 淡青绿色 */
+    --accent-light: rgba(174, 220, 170, 0.4); /* 淡薄荷绿 */
+    --success-color: rgba(75, 195, 178, 0.7); /* 淡青绿色 */
+    --error-color: rgba(229, 115, 115, 0.7); /* 降低错误色调不透明度 */
+    --nav-bg: rgba(255, 255, 255, 0.9);
+    --nav-border: 1px solid rgba(174, 220, 170, 0.2); /* 淡薄荷绿导航栏边框 */
+  
+    /* 晨风茉莉主题的悬停效果 */
+    --card-hover-bg: rgba(174, 220, 170, 0.1); /* 淡薄荷绿悬停背景 */
+    --card-hover-border: rgba(75, 195, 178, 0.2); /* 淡青绿色悬停边框 */
+    --card-hover-shadow: 0 6px 12px rgba(27, 167, 208, 0.05); /* 淡蓝色阴影 */
+  }
+  
+  /* 黄昏玫瑰主题的渐变背景 */
+  .theme-dusk-rose body {
+    background: linear-gradient(135deg, #f8f9fa 0%, #f5eef8 25%, #e8eeff 50%, #fff0e8 75%, #f8f9fa 100%);
+    background-size: 400% 400%;
+    animation: gradientShift 20s ease infinite;
+  }
+  
+  /* 晨风茉莉主题的渐变背景 - 更新为薄荷之夏配色 */
+  .theme-zephyr-jasmine body {
+    background: linear-gradient(
+      135deg,
+      #f8f9fa 0%,
+      rgba(174, 220, 170, 0.15) 20% /* 淡薄荷绿 */,
+      rgba(75, 195, 178, 0.15) 50% /* 淡青绿色 */,
+      rgba(27, 167, 208, 0.15) 80% /* 淡蓝色 */,
+      #f8f9fa 100%
+    );
+    background-size: 400% 400%;
+    animation: gradientShift 20s ease infinite;
+  }
+  
+  /* 简约主题的背景 */
+  .theme-simple body {
+    background-color: var(--background-color);
+  }
+  
+  /* 应用主题变量到元素 */
+  .themed-card {
+    background-color: var(--card-bg);
+    border: var(--card-border);
+    box-shadow: var(--card-shadow);
+    color: var(--text-primary);
+    transition: all 0.15s ease-out;
+  }
+  
+  /* 主题卡片悬停效果 */
+  .themed-card:hover {
+    background-color: var(--card-hover-bg);
+    border-color: var(--card-hover-border);
+    box-shadow: var(--card-hover-shadow);
+  }
+  
+  .themed-text-primary {
+    color: var(--text-primary);
+  }
+  
+  .themed-text-secondary {
+    color: var(--text-secondary);
+  }
+  
+  .themed-nav {
+    background-color: var(--nav-bg);
+    border-bottom: var(--nav-border);
+  }
+  
+  .themed-button-accent {
+    background-color: var(--accent-color);
+    color: white;
+  }
+  
+  .themed-button-accent:hover {
+    background-color: var(--accent-light);
+    color: var(--accent-color);
+  }
+  
+  @keyframes gradientShift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  
+  

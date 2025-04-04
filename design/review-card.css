@@ -1,0 +1,195 @@
+/* 3D 翻转卡片效果 */
+.perspective {
+  perspective: 1000px;
+}
+
+.flip-card {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.flip-card-flipped .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card-front,
+.flip-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  transition: background-color 0.15s ease-out;
+}
+
+.flip-card-back {
+  transform: rotateY(180deg);
+}
+
+/* 宝石渐变背景 - 更浅的颜色 */
+.gem-gradient-bg {
+  background: linear-gradient(
+    135deg,
+    #f8f9fa 0%,
+    #f5eef8 25% /* 更浅的粉紫色 */,
+    #e8eeff 50% /* 更浅的蓝色 */,
+    #fff0e8 75% /* 更浅的橙色 */,
+    #f8f9fa 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 20s ease infinite;
+}
+
+/* 晨风茉莉渐变背景 - 更淡的颜色 */
+.jasmine-gradient-bg {
+  background: linear-gradient(
+    135deg,
+    #f8f9fa 0%,
+    #eef7f8 20% /* 更淡的青色 */,
+    #d9e6eb 50% /* 更淡的湖水蓝 */,
+    #f0f5f1 80% /* 更淡的浅绿色 */,
+    #f8f9fa 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 20s ease infinite;
+}
+
+.gem-card-front {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.gem-card-back {
+  background: rgba(243, 152, 114, 0.08); /* 降低透明度 */
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(105, 127, 244, 0.2); /* 降低透明度 */
+}
+
+/* 晨风茉莉卡片样式 - 薄荷之夏配色 */
+.jasmine-card-front {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(174, 220, 170, 0.3); /* 淡薄荷绿边框 */
+}
+
+.jasmine-card-back {
+  background: rgba(75, 195, 178, 0.03); /* 淡青绿色背景 */
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(174, 220, 170, 0.2); /* 淡薄荷绿边框 */
+}
+
+/* 悬停效果 - 黄昏玫瑰主题 */
+.theme-dusk-rose .flip-card:hover .gem-card-front {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(243, 152, 114, 0.3);
+}
+
+.theme-dusk-rose .flip-card:hover .flip-card-inner {
+  box-shadow: 0 6px 12px rgba(105, 127, 244, 0.15);
+}
+
+/* 悬停效果 - 简约主题 */
+.theme-simple .flip-card:hover .gem-card-front {
+  background-color: #f0f7ff;
+  border-color: #d1e0ff;
+}
+
+.theme-simple .flip-card:hover .flip-card-inner {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 简约主题下的卡片背面样式 */
+.theme-simple .flip-card-flipped .flip-card-inner {
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+.theme-simple .flip-card-back {
+  background-color: rgba(239, 246, 255, 0.95);
+  border-color: rgba(147, 197, 253, 0.3);
+}
+
+/* 悬停效果 - 晨风茉莉主题 - 薄荷之夏配色 */
+.theme-zephyr-jasmine .flip-card:hover .jasmine-card-front {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(75, 195, 178, 0.2); /* 淡青绿色边框 */
+}
+
+.theme-zephyr-jasmine .flip-card:hover .flip-card-inner {
+  box-shadow: 0 6px 12px rgba(27, 167, 208, 0.08); /* 淡蓝色阴影 */
+}
+
+.gem-nav {
+  background: rgba(255, 255, 255, 0.9); /* 增加不透明度 */
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(229, 190, 239, 0.2);
+}
+
+/* 晨风茉莉导航栏 - 薄荷之夏配色 */
+.jasmine-nav {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(174, 220, 170, 0.2); /* 淡薄荷绿边框 */
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* 闪光效果 */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(30deg);
+  animation: shimmerEffect 3s infinite;
+}
+
+@keyframes shimmerEffect {
+  0% {
+    transform: translateX(-100%) rotate(30deg);
+  }
+  100% {
+    transform: translateX(100%) rotate(30deg);
+  }
+}
+
