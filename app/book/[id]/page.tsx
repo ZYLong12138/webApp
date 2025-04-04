@@ -12,6 +12,7 @@ import { ReviewCardButton } from "@/Integration_modules/review-card-button"
 import type { VocabularyBook, VocabularyWord } from "@/types/vocabulary"
 import { ScrollButtons } from "@/Integration_modules/scroll-buttons"
 import { getBookWordCount } from "@/services/vocabulary-service"
+import { DictationButton } from "@/Integration_modules/dictation-button"
 
 export default function BookPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -86,6 +87,7 @@ export default function BookPage({ params }: { params: { id: string } }) {
           {!isLoading && !error && book && (
             <div className="flex gap-2">
               <ReviewCardButton variant="outline" buttonText="词卡复习" />
+              <DictationButton variant="outline" buttonText="单词默写" bookId={params.id} />
               <LearnWordButton variant="default" size="default" buttonText="开始学习单词" bookId={params.id} />
             </div>
           )}
