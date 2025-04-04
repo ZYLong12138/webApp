@@ -13,6 +13,7 @@ import type { VocabularyBook, VocabularyWord } from "@/types/vocabulary"
 import { ScrollButtons } from "@/Integration_modules/scroll-buttons"
 import { getBookWordCount } from "@/services/vocabulary-service"
 import { DictationButton } from "@/Integration_modules/dictation-button"
+import { Progress } from "@/components/ui/progress"
 
 export default function BookPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -21,6 +22,7 @@ export default function BookPage({ params }: { params: { id: string } }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [wordCount, setWordCount] = useState(0)
+  const [learnedWords, setLearnedWords] = useState(0)
 
   // 获取词书信息和单词列表
   useEffect(() => {
@@ -45,12 +47,17 @@ export default function BookPage({ params }: { params: { id: string } }) {
           const count = await getBookWordCount(params.id)
           setWordCount(count)
 
+          // 获取已学习的单词数量 (计算掌握程度 >= 3 的单词)
+          const learnedCount = wordsData.filter((word) => word.mastery_level >= 3).length
+          setLearnedWords(learnedCount)
+
           setError(null)
         } catch (err) {
           console.error("获取词书单词失败:", err)
           // 即使获取单词失败，仍然显示词书信息
           setWords([])
           setWordCount(0)
+          setLearnedWords(0)
           setError("无法加载词书中的单词，但您仍然可以查看词书信息")
         }
       } catch (err) {
@@ -112,9 +119,16 @@ export default function BookPage({ params }: { params: { id: string } }) {
               <div className="mb-8 text-center">
                 <h1 className="text-3xl font-bold mb-2">{book.book_name}</h1>
                 <p className="text-gray-600">{book.description}</p>
-                <div className="flex items-center justify-center mt-4">
-                  <BookOpen className="h-5 w-5 text-blue-600 mr-2" />
-                  <span className="text-gray-700">词汇量: {wordCount}</span>
+                <div className="flex flex-col items-center justify-center mt-4 w-full max-w-md mx-auto">
+                  <div className="w-full mb-2">
+                    <Progress value={(learnedWords / wordCount) * 100} className="h-2" />
+                  </div>
+                  <div className="flex items-center justify-center text-sm text-gray-700">
+                    <BookOpen className="h-4 w-4 text-blue-600 mr-2" />
+                    <span>
+                      学习进度: {learnedWords}/{wordCount}
+                    </span>
+                  </div>
                 </div>
               </div>
 

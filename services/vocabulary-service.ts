@@ -602,3 +602,252 @@ export async function deleteBook(bookId: string): Promise<boolean> {
   }
 }
 
+// 添加以下函数到vocabulary-service.ts文件中
+
+// 获取用户的学习进度
+export async function getUserLearningProgress(): Promise<{
+  learnedWords: number[]
+  nextWordsToLearn: number[]
+  creationDates: Record<number, string>
+}> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot get learning progress")
+      return { learnedWords: [], nextWordsToLearn: [], creationDates: {} }
+    }
+
+    // 查询用户已学习的单词
+    const { data: masteryData, error: masteryError } = await supabase
+      .from("word_mastery")
+      .select("word_id, mastery_level, updated_at")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: true })
+
+    if (masteryError) {
+      console.error("Error fetching user mastery data:", masteryError)
+      throw masteryError
+    }
+
+    // 创建单词ID到创建日期的映射
+    const creationDates: Record<number, string> = {}
+
+    // 已学习的单词ID列表
+    const learnedWords: number[] = []
+
+    // 下一组要学习的单词ID列表（掌握程度低的单词）
+    const nextWordsToLearn: number[] = []
+
+    // 处理掌握程度数据
+    masteryData?.forEach((item) => {
+      const wordId = typeof item.word_id === "string" ? Number.parseInt(item.word_id) : item.word_id
+      creationDates[wordId] = item.updated_at
+
+      // 根据掌握程度决定单词是否需要继续学习
+      if (item.mastery_level >= 3) {
+        // 掌握程度高的单词视为已学习
+        learnedWords.push(wordId)
+      } else {
+        // 掌握程度低的单词需要继续学习
+        nextWordsToLearn.push(wordId)
+      }
+    })
+
+    return { learnedWords, nextWordsToLearn, creationDates }
+  } catch (error) {
+    console.error("Error in getUserLearningProgress:", error)
+    return { learnedWords: [], nextWordsToLearn: [], creationDates: {} }
+  }
+}
+
+// 获取下一批要学习的单词
+export async function getNextWordsToLearn(limit = 10, bookId?: string): Promise<VocabularyWord[]> {
+  try {
+    // 获取用户学习进度
+    const { learnedWords, nextWordsToLearn } = await getUserLearningProgress()
+
+    // 如果有需要继续学习的单词，优先返回这些单词
+    if (nextWordsToLearn.length > 0) {
+      // 限制返回的单词数量
+      const wordsToLearn = nextWordsToLearn.slice(0, limit)
+
+      // 查询这些单词的详细信息
+      const { data, error } = await supabase.from("word_list").select("*").in("id", wordsToLearn)
+
+      if (error) {
+        console.error("Error fetching words to learn:", error)
+        throw error
+      }
+
+      return data || []
+    }
+
+    // 如果没有需要继续学习的单词，获取新单词
+    let query = supabase.from("word_list").select("*")
+
+    // 如果指定了词书ID，添加过滤条件
+    if (bookId && bookId !== "my-vocabulary") {
+      // 获取词书中的单词ID
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error("Error fetching book word mappings:", mappingError)
+        throw mappingError
+      }
+
+      if (mappingData && mappingData.length > 0) {
+        const wordIds = mappingData.map((item) => item.word_id)
+        query = query.in("id", wordIds)
+      }
+    }
+
+    // 排除已学习的单词
+    if (learnedWords.length > 0) {
+      query = query.not("id", "in", `(${learnedWords.join(",")})`)
+    }
+
+    // 限制返回的单词数量并获取数据
+    const { data, error } = await query.limit(limit)
+
+    if (error) {
+      console.error("Error fetching new words to learn:", error)
+      throw error
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getNextWordsToLearn:", error)
+    return []
+  }
+}
+
+// 按批次获取单词
+export async function getWordsByBatch(batch: number, wordsPerBatch = 5, bookId?: string): Promise<VocabularyWord[]> {
+  try {
+    // 计算偏移量
+    const offset = (batch - 1) * wordsPerBatch
+
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    // 如果没有指定词书ID，直接获取所有单词
+    if (!bookId || bookId === "my-vocabulary") {
+      const { data: words, error: wordsError } = await supabase
+        .from("word_list")
+        .select("*")
+        .order("id", { ascending: true })
+        .range(offset, offset + wordsPerBatch - 1)
+
+      if (wordsError) {
+        console.error("Error fetching vocabulary words by batch:", wordsError)
+        throw wordsError
+      }
+
+      // 处理掌握程度数据
+      return processWordMasteryData(words || [], userId)
+    }
+
+    // 如果指定了词书ID，尝试通过映射表过滤单词
+    try {
+      // 尝试获取词书中的单词ID列表
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+        .order("word_id", { ascending: true })
+        .range(offset, offset + wordsPerBatch - 1)
+
+      // 如果映射表不存在或查询出错，直接返回空数组
+      if (mappingError) {
+        console.error("Error fetching word mappings by batch:", mappingError)
+        return []
+      }
+
+      // 如果词书中有单词，获取这些单词的详细信息
+      if (mappingData && mappingData.length > 0) {
+        const wordIds = mappingData.map((item) => item.word_id)
+
+        const { data: words, error: wordsError } = await supabase
+          .from("word_list")
+          .select("*")
+          .in("id", wordIds)
+          .order("id", { ascending: true })
+
+        if (wordsError) {
+          console.error("Error fetching vocabulary words by batch:", wordsError)
+          throw wordsError
+        }
+
+        // 处理掌握程度数据
+        return processWordMasteryData(words || [], userId)
+      } else {
+        // 词书中没有单词，返回空数组
+        return []
+      }
+    } catch (error) {
+      // 如果出现错误（例如表不存在），返回空数组
+      console.error("Error in book word mapping by batch:", error)
+      return []
+    }
+  } catch (error) {
+    console.error("Error in getWordsByBatch:", error)
+    return []
+  }
+}
+
+// 检查是否有更多批次的单词
+export async function hasMoreBatches(currentBatch: number, wordsPerBatch = 5, bookId?: string): Promise<boolean> {
+  try {
+    // 计算下一批的偏移量
+    const nextBatchOffset = currentBatch * wordsPerBatch
+
+    // 如果没有指定词书ID，检查所有单词
+    if (!bookId || bookId === "my-vocabulary") {
+      const { count, error } = await supabase
+        .from("word_list")
+        .select("*", { count: "exact", head: true })
+        .range(nextBatchOffset, nextBatchOffset)
+
+      if (error) {
+        console.error("Error checking for more batches:", error)
+        return false
+      }
+
+      return count > 0
+    }
+
+    // 如果指定了词书ID，检查词书中的单词
+    try {
+      const { count, error } = await supabase
+        .from("book_word_mapping")
+        .select("*", { count: "exact", head: true })
+        .eq("book_id", bookId)
+        .range(nextBatchOffset, nextBatchOffset)
+
+      if (error) {
+        console.error("Error checking for more batches in book:", error)
+        return false
+      }
+
+      return count > 0
+    } catch (error) {
+      console.error("Error checking for more batches in book mapping:", error)
+      return false
+    }
+  } catch (error) {
+    console.error("Error in hasMoreBatches:", error)
+    return false
+  }
+}
+

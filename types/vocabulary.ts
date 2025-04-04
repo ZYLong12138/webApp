@@ -7,6 +7,7 @@ export interface VocabularyWord {
   mastery_level: number
   last_reviewed: string | null
   created_at?: string
+  has_mastery_data?: boolean // Add this property
 }
 
 export interface NewVocabularyWord {

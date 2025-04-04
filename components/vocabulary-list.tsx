@@ -107,24 +107,6 @@ export function VocabularyList({ words: initialWords, onWordDeleted, bookId = "m
     }
   }
 
-  // 根据掌握程度返回对应的文本
-  const getMasteryLevelText = (level: number) => {
-    switch (level) {
-      case 0:
-        return "未掌握"
-      case 1:
-        return "初步了解"
-      case 2:
-        return "基本掌握"
-      case 3:
-        return "熟练掌握"
-      case 4:
-        return "完全掌握"
-      default:
-        return "未学习" // 默认值
-    }
-  }
-
   // 处理页码变化
   const handlePageChange = async (page: number) => {
     setCurrentPage(page)
@@ -181,7 +163,26 @@ export function VocabularyList({ words: initialWords, onWordDeleted, bookId = "m
                   <TableRow key={word.id}>
                     <TableCell className="font-medium">{word.word}</TableCell>
                     <TableCell className="max-w-[300px] truncate">{word.definition}</TableCell>
-                    <TableCell>{getMasteryLevelText(word.mastery_level)}</TableCell>
+                    <TableCell>
+                      {/* 检查单词是否有掌握度数据 */}
+                      {(word as any).has_mastery_data ? (
+                        <span
+                          className={`font-medium ${
+                            word.mastery_level >= 3
+                              ? "text-green-600"
+                              : word.mastery_level >= 1
+                                ? "text-blue-600"
+                                : word.mastery_level <= -1
+                                  ? "text-red-600"
+                                  : "text-gray-600"
+                          }`}
+                        >
+                          {word.mastery_level}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">未学习</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
