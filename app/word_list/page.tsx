@@ -21,6 +21,9 @@ import { ReviewCardButton } from "@/Integration_modules/review-card-button"
 // 在导入部分添加以下内容
 import { ScrollButtons } from "@/Integration_modules/scroll-buttons"
 
+// 添加导入语句:
+import { DictationButton } from "@/Integration_modules/dictation-button"
+
 export default function WordListPage() {
   // Initialize the router
   const router = useRouter()
@@ -44,6 +47,9 @@ export default function WordListPage() {
           <div className="flex gap-2">
             {/* Add the ReviewCardButton here */}
             <ReviewCardButton variant="outline" buttonText="词卡复习" />
+
+            {/* Add the DictationButton here */}
+            <DictationButton variant="outline" buttonText="单词默写" />
 
             {/* Existing LearnWordButton */}
             <LearnWordButton variant="default" size="default" buttonText="开始学习单词" />
