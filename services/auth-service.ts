@@ -1,11 +1,6 @@
 import { supabase } from "@/lib/supabase";
-
-// 响应接口
-interface AuthResult {
-  success: boolean;
-  message: string;
-  data?: any;
-}
+import type { AuthResult } from "@/types/auth";
+import { useRouter } from "next/navigation";
 
 // 注册新用户
 export async function signUpWithEmail(email: string, password: string): Promise<AuthResult> {
@@ -92,5 +87,25 @@ export async function verifyEmail(email: string, token: string): Promise<AuthRes
       success: false,
       message: err instanceof Error ? err.message : '验证过程中发生错误',
     };
+  }
+}
+
+// 退出登录，此函数用户退出登录后，删除本地存储认证信息，并重定向到app首页。
+export async function signOut(): Promise<boolean> {
+  try {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error("Error signing out:", error)
+      return false
+    }
+    
+    // 重定向到首页
+    if (typeof window !== 'undefined') {
+      window.location.href = '/'
+    }
+    return true
+  } catch (error) {
+    console.error("Error in signOut:", error)
+    return false
   }
 }

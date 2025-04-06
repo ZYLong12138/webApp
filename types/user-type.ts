@@ -43,3 +43,21 @@ export interface LearningProgress {
   currentStreak: number
   longestStreak: number
 } 
+
+
+//单词掌握情况 add by zyl.03.31
+export interface word_mastery{
+  word_id:number
+  mastery_level:number
+  review_count:number
+  last_review_time:string | number
+}
+//用户学习日志数据结构
+export interface study_log{
+  userId: string
+  learning_time:number
+  studied_words_yestoday:number
+  study_plan:number
+  study_time_length:number
+  book_learning:string
+}
