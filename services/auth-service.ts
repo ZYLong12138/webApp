@@ -5,6 +5,28 @@ import { useRouter } from "next/navigation";
 // 注册新用户
 export async function signUpWithEmail(email: string, password: string): Promise<AuthResult> {
   try {
+    // 先检查邮箱是否已存在
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('email', email)
+      .single()
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 表示没有找到记录
+      console.error("Error checking existing user:", checkError)
+      return {
+        success: false,
+        message: '检查邮箱时发生错误'
+      }
+    }
+
+    if (existingUser) {
+      return {
+        success: false,
+        message: '该邮箱已被注册'
+      }
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,

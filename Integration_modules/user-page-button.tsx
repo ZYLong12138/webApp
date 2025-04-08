@@ -140,6 +140,16 @@ export function UserPageButton({
       return
     }
 
+    // 验证密码长度
+    if (formData.password.length < 6) {
+      toast({
+        title: "密码太短",
+        description: "密码长度至少为6个字符",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -152,10 +162,26 @@ export function UserPageButton({
           description: result.message || "请查收邮箱完成注册",
         })
         setActiveTab("login") // 切换到登录选项卡
+        // 清空表单
+        setFormData({
+          email: "",
+          password: "",
+          confirmPassword: "",
+        })
       } else {
+        // 根据不同的错误类型显示不同的提示
+        let errorTitle = "注册失败"
+        let errorDescription = result.message
+
+        if (result.message === "该邮箱已被注册") {
+          errorTitle = "邮箱已存在"
+          errorDescription = "该邮箱已被注册，请直接登录或使用其他邮箱"
+          setActiveTab("login") // 如果是邮箱重复，自动切换到登录选项卡
+        }
+
         toast({
-          title: "注册失败",
-          description: result.message || "注册过程中发生错误",
+          title: errorTitle,
+          description: errorDescription,
           variant: "destructive",
         })
       }
