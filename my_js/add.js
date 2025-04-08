@@ -1,7 +1,20 @@
-import { supabase } from '../lib/supabase';
+//import { supabase } from '../lib/supabase';
 import fs from 'fs';
 import path from 'path';
 
+import { createClient } from "@supabase/supabase-js"
+
+// Supabase 配置
+const supabaseUrl = 'https://gqfzghxvimafciluajki.supabase.co'
+// 使用服务角色密钥而不是匿名密钥
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZnpnaHh2aW1hZmNpbHVhamtpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTQ5NzM5MSwiZXhwIjoyMDU3MDczMzkxfQ.1xlkAfeiSNlh_kjV7AG93YY77JRW8qlel1CVzIPqFaA'
+
+export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+})
 // 配置
 const config = {
   bucket: 'word-audio',
@@ -114,9 +127,12 @@ async function processBatch(words, batchSize) {
 async function main() {
   try {
     logger.info('开始获取单词列表...');
+    // 从第 1000 个单词开始获取
     const { data: words, error } = await supabase
       .from('word_list')
-      .select('word');
+      .select('word')
+      .order('id', { ascending: true })
+      .range(4153, 4500); // 从第 1000 个开始
 
     if (error) {
       throw new Error(`获取单词失败: ${error.message}`);
