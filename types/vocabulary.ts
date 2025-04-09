@@ -7,6 +7,7 @@ export interface VocabularyWord {
   mastery_level: number
   last_reviewed: string | null
   created_at?: string
+  vedio?: string
 }
 
 export interface NewVocabularyWord {
@@ -14,17 +15,22 @@ export interface NewVocabularyWord {
   definition: string
   example?: string | null
   pronunciation?: string
+  mastery_level?: number
+  vedio?: string
 }
 
 export interface VocabularyBook {
   id: string | number
   book_name: string
   description: string
+  created_at?: string
 }
 
 export interface BookWordMapping {
-  book_id: string | number
-  word_id: number | number
+  id: string
+  book_id: string
+  word_id: string
+  created_at?: string
 }
 
 

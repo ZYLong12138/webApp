@@ -11,6 +11,11 @@ import { BookButton, BookButtonGrid } from "@/Integration_modules/book-button"
 import { UserPageButton } from "@/Integration_modules/user-page-button"
 import { getAllBooks, getBookWordCount } from "@/services/vocabulary-service"
 import type { VocabularyBook } from "@/types/vocabulary"
+import { BookSelect } from '@/components/book-select'
+import { BookList } from '@/components/book-list'
+import { BookForm } from '@/components/book-form'
+import { VocabularyList } from '@/components/vocabulary-list'
+import { Plus } from 'lucide-react'
 
 export default function BookSelectPage() {
   const [books, setBooks] = useState<VocabularyBook[]>([])
@@ -19,6 +24,7 @@ export default function BookSelectPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [bookWordCounts, setBookWordCounts] = useState<Record<string, number>>({})
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
 
   // 获取词书列表
   useEffect(() => {
@@ -172,6 +178,12 @@ export default function BookSelectPage() {
             <p className="text-center text-gray-500 text-sm">您还没有创建自定义词书，点击上方按钮创建</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* 词汇列表 */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold mb-4">词汇列表</h2>
+        <VocabularyList bookId={selectedBookId} />
       </div>
 
       <footer className="mt-8 text-center text-sm text-gray-500">
