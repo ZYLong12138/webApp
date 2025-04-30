@@ -2,17 +2,25 @@
 
 import { useRouter, useSearchParams } from "next/navigation"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
-import { WordLearningCard } from "@/components/word-learning-card"
 import { useState, useEffect } from "react"
-import { getBookById } from "@/services/vocabulary-service"
+import { getBookById, getBookWordCount, getWordsByLevel } from "@/services/vocabulary-service"
+import { WordCardSelection } from "@/components/word-card-selection"
+import { WordLearningCard } from "@/components/word-learning-card"
+import type { VocabularyWord } from "@/types/vocabulary"
+import { useTheme } from "@/contexts/theme-context"
 
 export default function LearnWordPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const bookId = searchParams.get("bookId") || undefined
+  const level = Number.parseInt(searchParams.get("level") || "1", 10)
   const [bookTitle, setBookTitle] = useState<string>("词汇学习")
+  const [isSelectionMode, setIsSelectionMode] = useState(true)
+  const [selectedWords, setSelectedWords] = useState<VocabularyWord[]>([])
+  const { theme } = useTheme()
+
+  // 在 LearnWordPage 组件中添加 allLevelWords 状态
+  const [allLevelWords, setAllLevelWords] = useState<VocabularyWord[]>([])
 
   // 获取词书信息
   useEffect(() => {
@@ -21,7 +29,16 @@ export default function LearnWordPage() {
         try {
           const book = await getBookById(bookId)
           if (book) {
-            setBookTitle(book.book_name)
+            // 获取词书的总单词数量
+            const count = await getBookWordCount(bookId)
+            // 计算总关卡数
+            const totalLevels = Math.ceil(count / 50)
+
+            setBookTitle(`${book.book_name} - 第${level}关${level < totalLevels ? ` (共${totalLevels}关)` : ""}`)
+
+            // 获取当前关卡的所有单词
+            const levelWords = await getWordsByLevel(bookId, level)
+            setAllLevelWords(levelWords)
           }
         } catch (error) {
           console.error("获取词书信息失败:", error)
@@ -30,34 +47,58 @@ export default function LearnWordPage() {
     }
 
     fetchBookInfo()
-  }, [bookId])
+  }, [bookId, level])
 
   // 处理学习完成
-  const handleComplete = () => {
+  const handleLearningComplete = () => {
+    setIsSelectionMode(true)
+  }
+
+  // 处理返回
+  const handleBack = () => {
     router.back()
+  }
+
+  // 处理开始学习
+  const handleStartLearning = (words: VocabularyWord[]) => {
+    setSelectedWords(words)
+    setIsSelectionMode(false)
+  }
+
+  // 根据当前主题决定容器类名
+  const getContainerClass = () => {
+    switch (theme) {
+      case "dusk-rose":
+        return "min-h-screen gem-gradient-bg"
+      case "zephyr-jasmine":
+        return "min-h-screen jasmine-gradient-bg"
+      default:
+        return "min-h-screen bg-gray-50"
+    }
   }
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* 顶部导航 */}
-        <div className="p-4">
-          <div className="flex justify-between items-center">
-            <Button variant="ghost" className="text-gray-800 flex items-center gap-2" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4" />
-              返回
-            </Button>
-            <h1 className="text-xl font-bold">{bookTitle}</h1>
-            <div className="w-24"></div> {/* 占位元素，保持标题居中 */}
+      <div className={getContainerClass()}>
+        {isSelectionMode ? (
+          <WordCardSelection
+            bookId={bookId}
+            level={level}
+            onComplete={handleBack}
+            onStartLearning={handleStartLearning}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center px-4 max-w-2xl mx-auto w-full">
+            <WordLearningCard
+              words={selectedWords}
+              onComplete={handleLearningComplete}
+              bookId={bookId}
+              level={level}
+              allLevelWords={allLevelWords}
+            />
           </div>
-        </div>
-
-        {/* 主要内容 */}
-        <div className="flex-1 flex flex-col items-center justify-center px-4 max-w-2xl mx-auto w-full">
-          <WordLearningCard onComplete={handleComplete} maxWordsToLearn={5} bookId={bookId} />
-        </div>
+        )}
       </div>
     </ThemeProvider>
   )
 }
-

@@ -9,6 +9,7 @@ interface LearnWordButtonProps {
   size?: "default" | "sm" | "lg" | "icon"
   className?: string
   bookId?: string // 可选的词书ID参数，用于传递给学习页面
+  level?: number // 当前关卡
   buttonText?: string // 可自定义按钮文本
   showIcon?: boolean // 是否显示图标
 }
@@ -18,6 +19,7 @@ export function LearnWordButton({
   size = "default",
   className = "",
   bookId,
+  level = 1,
   buttonText = "开始学习",
   showIcon = true,
 }: LearnWordButtonProps) {
@@ -27,7 +29,7 @@ export function LearnWordButton({
   const handleClick = () => {
     // 如果有词书ID，则作为查询参数传递
     if (bookId) {
-      router.push(`/learn_word?bookId=${bookId}`)
+      router.push(`/learn_word?bookId=${bookId}&level=${level}`)
     } else {
       router.push("/learn_word")
     }

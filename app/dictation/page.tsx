@@ -3,13 +3,13 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Volume2, RefreshCw, Check, X, Pause, Play, Settings } from "lucide-react"
-import { getVocabularyWords, updateMasteryLevel } from "@/services/vocabulary-service"
+import { getVocabularyWords, getWordsByLevel, updateMasteryLevel } from "@/services/vocabulary-service"
 import type { VocabularyWord } from "@/types/vocabulary"
 import { ThemeSwitcherButton } from "@/Integration_modules/theme-switcher-button"
 import { useTheme } from "@/contexts/theme-context"
@@ -18,6 +18,10 @@ import { useToast } from "@/hooks/use-toast"
 
 export default function DictationPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const bookId = searchParams.get("bookId") || undefined
+  const level = Number.parseInt(searchParams.get("level") || "1", 10)
+
   const { theme } = useTheme()
   const { toast } = useToast()
   const [words, setWords] = useState<VocabularyWord[]>([])
@@ -42,10 +46,18 @@ export default function DictationPage() {
     const fetchWords = async () => {
       setIsLoading(true)
       try {
-        const data = await getVocabularyWords()
-        // 随机排序单词
-        const shuffled = [...data].sort(() => Math.random() - 0.5)
-        setWords(shuffled)
+        let data
+        if (bookId) {
+          // 如果指定了词书ID，按关卡获取单词
+          data = await getWordsByLevel(bookId, level)
+          setBookTitle(`第${level}关`)
+        } else {
+          // 随机排序单词
+          data = await getVocabularyWords()
+          const shuffled = [...data].sort(() => Math.random() - 0.5)
+          data = shuffled
+        }
+        setWords(data)
         setStats({
           ...stats,
           startTime: Date.now(),
@@ -58,7 +70,7 @@ export default function DictationPage() {
     }
 
     fetchWords()
-  }, [])
+  }, [bookId, level])
 
   // 自动聚焦输入框
   useEffect(() => {
@@ -279,7 +291,7 @@ export default function DictationPage() {
                     <div className="w-full max-w-md mb-6">
                       {showAnswer ? (
                         <div className="flex items-center justify-center">
-                          <div className={`text-3xl font-bold ${isCorrect ? "text-green-600" : "text-red-600"}`}>
+                          <div className={`text-2xl font-bold ${isCorrect ? "text-green-600" : "text-red-600"}`}>
                             {currentWord.word}
                           </div>
                           <Button variant="ghost" size="sm" className="ml-2" onClick={playPronunciation}>
@@ -289,13 +301,13 @@ export default function DictationPage() {
                       ) : (
                         <form onSubmit={handleSubmit} className="flex flex-col items-center">
                           <div className="w-full flex items-center justify-center mb-4">
-                            <div className="border-b-2 border-gray-300 w-64 text-center">
+                            <div className="border-b-2 border-gray-300 w-48 text-center">
                               <Input
                                 ref={inputRef}
                                 type="text"
                                 value={userInput}
                                 onChange={handleInputChange}
-                                className="text-center text-2xl border-none shadow-none focus-visible:ring-0 font-medium h-14"
+                                className="text-center text-xl border-none shadow-none focus-visible:ring-0 font-medium"
                                 placeholder="输入单词"
                                 disabled={isPaused}
                               />

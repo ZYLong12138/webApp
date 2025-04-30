@@ -39,6 +39,7 @@ export interface TestItem {
 // 学习管理器类
 export class LearningManager {
   private words: VocabularyWord[] = []
+  private allLevelWords: VocabularyWord[] = [] // 当前关卡的所有单词，用于生成干扰项
   private wordStates: Map<string, WordLearningState> = new Map()
   private testQueue: Array<{ wordId: string; testType: TestType }> = []
   private currentTestIndex = 0
@@ -47,9 +48,12 @@ export class LearningManager {
   /**
    * 初始化学习管理器
    * @param words 要学习的单词列表
+   * @param allLevelWords 当前关卡的所有单词（用于生成干扰项）
    */
-  constructor(words: VocabularyWord[]) {
+  constructor(words: VocabularyWord[], allLevelWords?: VocabularyWord[]) {
     this.words = [...words]
+    // 如果提供了所有单词，则使用它；否则使用学习单词列表
+    this.allLevelWords = allLevelWords && allLevelWords.length > 0 ? [...allLevelWords] : [...words]
     this.initializeWordStates()
     this.initializeTestQueue()
   }
@@ -174,8 +178,8 @@ export class LearningManager {
    * @returns 干扰项数组
    */
   private getDistractors(currentWordId: string, count: number): VocabularyWord[] {
-    // 过滤掉当前单词
-    const otherWords = this.words.filter((w) => w.id !== currentWordId)
+    // 从所有单词中过滤掉当前单词
+    const otherWords = this.allLevelWords.filter((w) => w.id !== currentWordId)
 
     // 如果可用单词不足，则重复使用
     if (otherWords.length < count) {
@@ -265,7 +269,7 @@ export class LearningManager {
   }
 
   /**
-   * 获取学习进度
+   * 取学习进度
    * @returns 学习进度信息
    */
   public getProgress(): {
@@ -326,4 +330,3 @@ export class LearningManager {
  * // 获取进度
  * const progress = learningManager.getProgress();
  */
-

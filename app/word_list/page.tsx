@@ -1,39 +1,22 @@
-// Add "use client" directive at the top
 "use client"
 
-// Import useRouter from next/navigation
 import { useRouter } from "next/navigation"
-// 引入 VocabularyDashboard 组件，用于显示词汇学习仪表盘
 import { VocabularyDashboard } from "@/components/vocabulary-dashboard"
-
-// 引入 ThemeProvider 组件，用于为应用提供主题切换功能
 import { ThemeProvider } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
-
-// Import the QuickAddWordButton component
 import { QuickAddWordButton } from "@/Integration_modules/quick-add-word-button"
-// Import the LearnWordButton component
 import { LearnWordButton } from "@/Integration_modules/learn-word-button"
-// Add this new import for ReviewCardButton
 import { ReviewCardButton } from "@/Integration_modules/review-card-button"
-
-// 在导入部分添加以下内容
 import { ScrollButtons } from "@/Integration_modules/scroll-buttons"
-
-// 添加导入语句:
 import { DictationButton } from "@/Integration_modules/dictation-button"
+import { VocabularyNav } from "@/components/vocabulary-nav"
+import { SpacedReviewButton } from "@/Integration_modules/spaced-review-button"
 
 export default function WordListPage() {
-  // Initialize the router
   const router = useRouter()
 
   return (
-    // ThemeProvider 组件包装整个应用，提供主题切换功能
-    // - attribute="class"：主题会通过修改 class 名称来切换（通常是 <html> 或 <body> 标签的 class）
-    // - defaultTheme="system"：默认主题设置为系统主题（可以自动切换到深色或浅色模式）
-    // - enableSystem：启用根据系统设置的主题自动切换（例如 Windows 或 macOS 的暗黑模式）
-    // - disableTransitionOnChange：禁用主题切换时的过渡动画
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <main className="min-h-screen bg-background">
         {/* Add back button and action buttons in a flex container */}
@@ -45,33 +28,26 @@ export default function WordListPage() {
 
           {/* Add buttons in a flex container */}
           <div className="flex gap-2">
-            {/* Add the ReviewCardButton here */}
             <ReviewCardButton variant="outline" buttonText="词卡复习" />
-
-            {/* Add the DictationButton here */}
             <DictationButton variant="outline" buttonText="单词默写" />
-
-            {/* Existing LearnWordButton */}
+            <SpacedReviewButton variant="outline" buttonText="间隔复习" />
             <LearnWordButton variant="default" size="default" buttonText="开始学习单词" />
           </div>
         </div>
-        {/* VocabularyDashboard 组件，用于显示和管理词汇学习内容 */}
+        <h1 className="text-3xl font-bold mb-8 text-center">我的单词本</h1>
+        <VocabularyNav currentPath="/word_list" />
         <VocabularyDashboard bookId="my-vocabulary" />
-        {/* Fixed position Quick Add Word button */}
         <div className="fixed bottom-6 right-6">
           <QuickAddWordButton
             size="lg"
             className="shadow-lg"
             onWordAdded={() => {
-              // Refresh the page to show the newly added word
               window.location.reload()
             }}
           />
         </div>
-        {/* 添加滚动按钮 */}
         <ScrollButtons />
       </main>
     </ThemeProvider>
   )
 }
-

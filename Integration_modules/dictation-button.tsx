@@ -11,6 +11,7 @@ interface DictationButtonProps {
   buttonText?: string
   showIcon?: boolean
   bookId?: string
+  level?: number
 }
 
 export function DictationButton({
@@ -20,6 +21,7 @@ export function DictationButton({
   buttonText = "单词默写",
   showIcon = true,
   bookId,
+  level = 1,
 }: DictationButtonProps) {
   const router = useRouter()
 
@@ -27,7 +29,7 @@ export function DictationButton({
   const handleClick = () => {
     // 如果有词书ID，则作为查询参数传递
     if (bookId) {
-      router.push(`/dictation?bookId=${bookId}`)
+      router.push(`/dictation?bookId=${bookId}&level=${level}`)
     } else {
       router.push("/dictation")
     }
