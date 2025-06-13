@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createLearningPlan, getUserLearningPlans, type LearningPlan } from "@/services/learning-plan-service"
 import { toast } from "@/components/ui/use-toast"
 import { Progress } from "@/components/ui/progress"
+import { ReviewCardButton } from "@/Integration_modules/review-card-button"
 
 // 添加动画样式
 const animationStyles = `
@@ -465,36 +466,104 @@ export default function HomePage() {
                     <p className="text-sm mt-1">点击下方"添加学习计划"按钮创建您的第一个学习计划</p>
                   </div>
                 ) : (
-                  userLearningPlans.map((plan) => (
-                    <Card key={plan.id} className="mb-3">
-                      <CardContent className="p-3">
-                        <div className="flex justify-between items-center mb-2">
-                          <div>
-                            <BookButton
-                              id={plan.book_id}
-                              title={`${plan.book_name} 词表总览`}
-                              wordCount={plan.total_words}
-                              description=""
-                              asTitle={true}
-                            />
-                            <p className="text-sm text-muted-foreground">
-                              每日 {plan.daily_word_count} 个单词 · 总进度 {learnedWordCounts[plan.book_id] || 0}/
-                              {plan.total_words}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <LearnWordButton bookId={plan.book_id} count={plan.daily_word_count} />
-                            <SpacedReviewButton
-                              bookId={plan.book_id}
-                              count={bookReviewCounts[plan.book_id] || 0}
-                              isLoading={isLoadingReviewCounts}
-                            />
-                          </div>
-                        </div>
-                        <Progress value={calculateProgress(plan.book_id, plan.total_words)} className="h-2" />
-                      </CardContent>
-                    </Card>
-                  ))
+                  <div>
+                    {userLearningPlans.map((plan) => (
+                      <div key={plan.id} className="space-y-3 mb-4">
+                        {/* 学习卡片 */}
+                        <Card className="border-l-4 border-l-blue-500">
+                          <CardContent className="p-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                                  <BookButton
+                                    id={plan.book_id}
+                                    title={`${plan.book_name} 学习`}
+                                    wordCount={plan.total_words}
+                                    description=""
+                                    asTitle={true}
+                                  />
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  每日 {plan.daily_word_count} 个单词 · 总进度 {learnedWordCounts[plan.book_id] || 0}/
+                                  {plan.total_words}
+                                </p>
+                              </div>
+                              <div>
+                                <LearnWordButton bookId={plan.book_id} count={plan.daily_word_count} />
+                              </div>
+                            </div>
+                            <Progress value={calculateProgress(plan.book_id, plan.total_words)} className="h-2 mt-2" />
+                          </CardContent>
+                        </Card>
+
+                        {/* 词卡复习卡片 - 新增 */}
+                        <Card className="border-l-4 border-l-purple-500">
+                          <CardContent className="p-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 rounded-full bg-purple-500 mr-2"></div>
+                                  <BookButton
+                                    id={plan.book_id}
+                                    title={`${plan.book_name} 词卡复习`}
+                                    wordCount={learnedWordCounts[plan.book_id] || 0}
+                                    description=""
+                                    asTitle={true}
+                                  />
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  已学习 {learnedWordCounts[plan.book_id] || 0} 个单词
+                                </p>
+                              </div>
+                              <div>
+                                <ReviewCardButton
+                                  bookId={plan.book_id}
+                                  variant="outline"
+                                  className="border-purple-500 text-purple-600 hover:bg-purple-50"
+                                  buttonText="词卡复习"
+                                  showIcon={true}
+                                  icon="book"
+                                  disabled={!learnedWordCounts[plan.book_id] || learnedWordCounts[plan.book_id] <= 0}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* 间隔复习卡片 */}
+                        <Card className="border-l-4 border-l-amber-500">
+                          <CardContent className="p-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 rounded-full bg-amber-500 mr-2"></div>
+                                  <BookButton
+                                    id={plan.book_id}
+                                    title={`${plan.book_name} 待复习`}
+                                    wordCount={bookReviewCounts[plan.book_id] || 0}
+                                    description=""
+                                    asTitle={true}
+                                  />
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  今日待复习 {bookReviewCounts[plan.book_id] || 0} 个单词
+                                </p>
+                              </div>
+                              <div>
+                                <SpacedReviewButton
+                                  bookId={plan.book_id}
+                                  count={bookReviewCounts[plan.book_id] || 0}
+                                  isLoading={isLoadingReviewCounts}
+                                  disabled={bookReviewCounts[plan.book_id] <= 0}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 

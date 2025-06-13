@@ -19,14 +19,42 @@ interface AudioContextType {
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined)
 
+// 持久化存储键
+const STORAGE_KEYS = {
+  ACTIVE_NOISES: "audio-active-noises",
+  VOLUME: "audio-volume",
+  IS_MUTED: "audio-is-muted",
+}
+
 export function AudioProvider({ children }: { children: React.ReactNode }) {
-  const [activeNoises, setActiveNoises] = useState<NoiseType[]>([])
-  const [volume, setVolume] = useState(0.5)
-  const [isMuted, setIsMuted] = useState(false)
+  // 从localStorage获取初始状态
+  const getInitialActiveNoises = () => {
+    if (typeof window === "undefined") return []
+    const savedNoises = localStorage.getItem(STORAGE_KEYS.ACTIVE_NOISES)
+    return savedNoises ? (JSON.parse(savedNoises) as NoiseType[]) : []
+  }
+
+  const getInitialVolume = () => {
+    if (typeof window === "undefined") return 0.5
+    const savedVolume = localStorage.getItem(STORAGE_KEYS.VOLUME)
+    return savedVolume ? Number.parseFloat(savedVolume) : 0.5
+  }
+
+  const getInitialMuted = () => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem(STORAGE_KEYS.IS_MUTED) === "true"
+  }
+
+  const [activeNoises, setActiveNoises] = useState<NoiseType[]>(getInitialActiveNoises)
+  const [volume, setVolume] = useState(getInitialVolume)
+  const [isMuted, setIsMuted] = useState(getInitialMuted)
   const [isAudioInitialized, setIsAudioInitialized] = useState(false)
+  const [isAudioPreloaded, setIsAudioPreloaded] = useState(false)
+
   const audioRefs = useRef<Map<NoiseType, HTMLAudioElement>>(new Map())
   const audioLoaded = useRef<Set<NoiseType>>(new Set())
   const audioErrors = useRef<Set<NoiseType>>(new Set())
+  const pendingPlay = useRef<Set<NoiseType>>(new Set())
 
   // 音频URL
   const noiseUrls = {
@@ -36,9 +64,30 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     fire: "/sounds/fire.mp3",
   }
 
-  // 初始化音频 - 仅在用户交互后调用
-  const initializeAudio = () => {
-    if (isAudioInitialized) return
+  // 保存活跃噪音到localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_NOISES, JSON.stringify(activeNoises))
+    }
+  }, [activeNoises])
+
+  // 保存音量设置到localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEYS.VOLUME, volume.toString())
+    }
+  }, [volume])
+
+  // 保存静音状态到localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEYS.IS_MUTED, isMuted.toString())
+    }
+  }, [isMuted])
+
+  // 预加载所有音频文件，但不播放
+  const preloadAudio = () => {
+    if (isAudioPreloaded) return
 
     const noiseTypes: NoiseType[] = ["rain", "river", "thunder", "fire"]
 
@@ -46,68 +95,75 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       // 预创建所有音频实例，但不自动播放
       noiseTypes.forEach((type) => {
         if (!audioRefs.current.has(type)) {
-          console.log(`Initializing ${type} audio...`)
+          console.log(`预加载 ${type} 音频...`)
 
-          // 检查文件是否存在
-          fetch(noiseUrls[type])
-            .then((response) => {
-              if (!response.ok) {
-                throw new Error(`Failed to fetch ${type} audio: ${response.status} ${response.statusText}`)
-              }
-              return response.blob()
-            })
-            .then((blob) => {
-              // 文件存在，创建音频元素
-              const audio = new Audio()
-              audio.loop = true
-              audio.volume = volume
+          // 创建音频元素
+          const audio = new Audio()
+          audio.preload = "metadata"
+          audio.loop = true
+          audio.volume = volume
+          audio.muted = isMuted
+          audio.src = noiseUrls[type]
 
-              // 使用 URL.createObjectURL 创建本地 URL
-              const audioUrl = URL.createObjectURL(blob)
-              audio.src = audioUrl
+          // 添加事件监听器
+          audio.addEventListener("canplaythrough", () => {
+            audioLoaded.current.add(type)
+            console.log(`${type} 音频加载成功`)
 
-              // 添加事件监听器
-              audio.addEventListener("canplaythrough", () => {
-                audioLoaded.current.add(type)
-                console.log(`${type} audio loaded successfully`)
+            // 如果这个噪音在等待播放队列中，开始播放
+            if (pendingPlay.current.has(type)) {
+              console.log(`开始播放之前等待的 ${type} 音频`)
+              audio.play().catch((e) => {
+                console.error(`播放 ${type} 音频失败:`, e)
               })
+              pendingPlay.current.delete(type)
+            }
+          })
 
-              audio.addEventListener("error", (e) => {
-                const error = e as ErrorEvent
-                audioErrors.current.add(type)
-                console.error(`Error loading ${type} audio:`, error.message || "Unknown error")
-              })
+          audio.addEventListener("error", (e) => {
+            const error = e as ErrorEvent
+            audioErrors.current.add(type)
+            console.error(`加载 ${type} 音频错误:`, error.message || "未知错误")
+          })
 
-              // 添加自动恢复播放的处理
-              audio.addEventListener("pause", () => {
-                // 如果这个音频应该在播放但被意外暂停了
-                if (activeNoises.includes(type) && !audio.ended && !isMuted) {
-                  console.log(`${type} audio paused unexpectedly, attempting to resume`)
-
-                  // 用户交互后尝试恢复播放
-                  setTimeout(() => {
-                    const playPromise = audio.play()
-                    if (playPromise !== undefined) {
-                      playPromise.catch((e) => {
-                        console.error(`Failed to resume ${type} audio:`, e)
-                      })
-                    }
-                  }, 100)
-                }
-              })
-
-              audioRefs.current.set(type, audio)
-            })
-            .catch((error) => {
-              console.error(`Error initializing ${type} audio:`, error)
-            })
+          audioRefs.current.set(type, audio)
         }
       })
 
-      setIsAudioInitialized(true)
+      setIsAudioPreloaded(true)
     } catch (error) {
-      console.error("Error initializing audio:", error)
+      console.error("预加载音频错误:", error)
     }
+  }
+
+  // 初始化音频 - 仅在用户交互后调用
+  const initializeAudio = () => {
+    if (isAudioInitialized) return
+
+    // 预加载音频
+    preloadAudio()
+
+    // 恢复之前活跃的噪音
+    if (activeNoises.length > 0) {
+      console.log("恢复之前活跃的噪音:", activeNoises)
+
+      activeNoises.forEach((type) => {
+        const audio = audioRefs.current.get(type)
+        if (audio) {
+          if (audioLoaded.current.has(type)) {
+            // 如果音频已加载，直接播放
+            audio.play().catch((e) => {
+              console.error(`恢复播放 ${type} 音频失败:`, e)
+            })
+          } else {
+            // 如果音频尚未加载，添加到等待队列
+            pendingPlay.current.add(type)
+          }
+        }
+      })
+    }
+
+    setIsAudioInitialized(true)
   }
 
   // 处理活跃噪音变化 - 只控制播放/暂停，不重新创建音频实例
@@ -121,35 +177,42 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     audioRefs.current.forEach((audio, type) => {
       // 如果应该播放但当前没有播放
       if (currentNoiseSet.has(type) && audio.paused) {
-        console.log(`Starting ${type} audio`)
+        console.log(`开始播放 ${type} 音频`)
 
-        // 尝试播放
-        try {
-          const playPromise = audio.play()
-          if (playPromise !== undefined) {
-            playPromise.catch((e) => {
-              console.error(`Failed to play ${type} audio:`, e)
+        // 检查音频是否已加载
+        if (audioLoaded.current.has(type)) {
+          // 尝试播放
+          try {
+            const playPromise = audio.play()
+            if (playPromise !== undefined) {
+              playPromise.catch((e) => {
+                console.error(`播放 ${type} 音频失败:`, e)
 
-              // 尝试重新加载并播放
-              setTimeout(() => {
-                audio.load()
-                audio.play().catch((e2) => {
-                  console.error(`Second attempt to play ${type} audio failed:`, e2)
-                })
-              }, 100)
-            })
+                // 尝试重新加载并播放
+                setTimeout(() => {
+                  audio.load()
+                  audio.play().catch((e2) => {
+                    console.error(`第二次尝试播放 ${type} 音频失败:`, e2)
+                  })
+                }, 100)
+              })
+            }
+          } catch (error) {
+            console.error(`播放 ${type} 音频错误:`, error)
           }
-        } catch (error) {
-          console.error(`Error playing ${type} audio:`, error)
+        } else {
+          // 如果音频尚未加载，添加到等待队列
+          console.log(`${type} 音频尚未加载，添加到等待队列`)
+          pendingPlay.current.add(type)
         }
       }
       // 如果不应该播放但当前正在播放
       else if (!currentNoiseSet.has(type) && !audio.paused) {
-        console.log(`Stopping ${type} audio`)
+        console.log(`停止 ${type} 音频`)
         try {
           audio.pause()
         } catch (error) {
-          console.error(`Error pausing ${type} audio:`, error)
+          console.error(`暂停 ${type} 音频错误:`, error)
         }
       }
     })
@@ -163,7 +226,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       try {
         audio.volume = isMuted ? 0 : volume
       } catch (error) {
-        console.error("Error setting audio volume:", error)
+        console.error("设置音频音量错误:", error)
       }
     })
   }, [volume, isMuted, isAudioInitialized])
@@ -171,21 +234,24 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   // 清理函数 - 在组件卸载时执行
   useEffect(() => {
     return () => {
+      // 在卸载前保存活跃噪音到sessionStorage
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("activeNoises", JSON.stringify(activeNoises))
+      }
+
       audioRefs.current.forEach((audio, type) => {
         try {
-          audio.pause()
+          // 不暂停音频，以允许持续播放
+          // 只清理blob URL
           if (audio.src.startsWith("blob:")) {
             URL.revokeObjectURL(audio.src)
           }
         } catch (error) {
-          console.error(`Error cleaning up ${type} audio:`, error)
+          console.error(`清理 ${type} 音频错误:`, error)
         }
       })
-      audioRefs.current.clear()
-      audioLoaded.current.clear()
-      audioErrors.current.clear()
     }
-  }, [])
+  }, [activeNoises])
 
   // 切换噪音类型
   const toggleNoise = (type: NoiseType) => {

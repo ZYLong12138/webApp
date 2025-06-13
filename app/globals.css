@@ -2,106 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 自定义基础样式，使用 :root 定义 CSS 变量 */
 @layer base {
   :root {
-    /* 背景色和前景色的 HSL 定义 */
-    --background: 0 0% 100%; /* 背景色设置为纯白色 */
-    --foreground: 222.2 84% 4.9%; /* 前景色设置为深色（暗灰色） */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-    /* 卡片、弹窗等元素的背景和前景色 */
-    --card: 0 0% 100%; /* 卡片背景色设置为纯白色 */
-    --card-foreground: 222.2 84% 4.9%; /* 卡片前景色设置为深色（暗灰色） */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-    --popover: 0 0% 100%; /* 弹窗背景色设置为纯白色 */
-    --popover-foreground: 222.2 84% 4.9%; /* 弹窗前景色设置为深色（暗灰色） */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    /* 主要颜色（例如按钮、链接等）的 HSL 定义 */
-    --primary: 221.2 83.2% 53.3%; /* 主要色（蓝色） */
-    --primary-foreground: 210 40% 98%; /* 主要色前景色（白色） */
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
 
-    /* 次要颜色的 HSL 定义 */
-    --secondary: 210 40% 96.1%; /* 次要色（浅蓝色） */
-    --secondary-foreground: 222.2 47.4% 11.2%; /* 次要色前景色（暗灰色） */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    /* 禁用或更暗的元素的颜色 */
-    --muted: 210 40% 96.1%; /* 被禁用的颜色（浅蓝色） */
-    --muted-foreground: 215.4 16.3% 46.9%; /* 被禁用的元素前景色（深灰色） */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    /* 高亮颜色 */
-    --accent: 210 40% 96.1%; /* 强调色（浅蓝色） */
-    --accent-foreground: 222.2 47.4% 11.2%; /* 强调色前景色（暗灰色） */
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
-    /* 销毁性操作颜色（例如删除按钮） */
-    --destructive: 0 84.2% 60.2%; /* 销毁色（红色） */
-    --destructive-foreground: 210 40% 98%; /* 销毁色前景色（白色） */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* 边框颜色 */
-    --border: 214.3 31.8% 91.4%; /* 边框颜色（浅灰色） */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
 
-    /* 输入框背景颜色 */
-    --input: 214.3 31.8% 91.4%; /* 输入框背景色（浅灰色） */
-
-    /* 输入框焦点环颜色 */
-    --ring: 221.2 83.2% 53.3%; /* 聚焦时环的颜色（蓝色） */
-
-    /* 全局圆角半径 */
-    --radius: 0.5rem; /* 所有元素的圆角半径 */
+    --radius: 0.5rem;
   }
 
-  /* 当页面启用暗黑模式时，使用 dark 类覆盖上述变量 */
   .dark {
-    --background: 222.2 84% 4.9%; /* 背景色变为暗灰色 */
-    --foreground: 210 40% 98%; /* 前景色变为白色 */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%; /* 卡片背景色变为暗灰色 */
-    --card-foreground: 210 40% 98%; /* 卡片前景色变为白色 */
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%; /* 弹窗背景色变为暗灰色 */
-    --popover-foreground: 210 40% 98%; /* 弹窗前景色变为白色 */
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 217.2 91.2% 59.8%; /* 主要色变为亮蓝色 */
-    --primary-foreground: 222.2 47.4% 11.2%; /* 主要色前景色变为暗灰色 */
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 217.2 32.6% 17.5%; /* 次要色变为深色 */
-    --secondary-foreground: 210 40% 98%; /* 次要色前景色变为白色 */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%; /* 被禁用的颜色变为深色 */
-    --muted-foreground: 215 20.2% 65.1%; /* 被禁用的元素前景色变为灰色 */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%; /* 强调色变为深色 */
-    --accent-foreground: 210 40% 98%; /* 强调色前景色变为白色 */
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%; /* 销毁色变为暗红色 */
-    --destructive-foreground: 210 40% 98%; /* 销毁色前景色变为白色 */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%; /* 边框颜色变为深色 */
-    --input: 217.2 32.6% 17.5%; /* 输入框背景色变为深色 */
-    --ring: 224.3 76.3% 48%; /* 聚焦时环的颜色变为亮蓝色 */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
   }
 }
 
-/* 为所有元素应用统一的边框样式 */
 @layer base {
   * {
-    @apply border-border; /* 为所有元素应用自定义的边框颜色 */
+    @apply border-border;
   }
-
-  /* 设置页面的背景和前景色 */
   body {
-    @apply bg-background text-foreground; /* 设置背景和前景色 */
+    @apply bg-background text-foreground;
   }
 }
 
-/* 热力图网格布局 */
-.grid-cols-52 {
-  grid-template-columns: repeat(52, minmax(0, 1fr));
+/* 添加遮盖效果的 CSS 类 */
+.vocabulary-hidden {
+  position: relative;
+  color: transparent !important;
 }
 
-.grid-cols-53 {
-  grid-template-columns: repeat(53, minmax(0, 1fr));
+.vocabulary-hidden::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #bfdbfe; /* bg-blue-200 */
+  border-radius: 0.25rem;
+  z-index: 1;
 }
 
-.grid-rows-7 {
-  grid-template-rows: repeat(7, minmax(0, 1fr));
+/* 根据内容类型设置不同的最小宽度和最大宽度 */
+.vocabulary-hidden.word-content::before {
+  min-width: 60px;
+  max-width: 150px;
+}
+
+.vocabulary-hidden.pronunciation-content::before {
+  min-width: 60px;
+  max-width: 120px;
+}
+
+.vocabulary-hidden.definition-content::before {
+  min-width: 80px;
+  max-width: 200px;
+  display: inline-block;
 }

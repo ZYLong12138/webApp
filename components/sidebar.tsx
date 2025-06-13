@@ -10,8 +10,8 @@ export function Sidebar() {
   const menuItems = [
     { name: "首页", icon: Home, path: "/" },
     { name: "仪表盘", icon: BarChart2, path: "/statistics" },
-    { name: "我的内容", icon: User, path: "/personal-vocabulary" },
-    { name: "词典", icon: Book, path: "/word_list" },
+    { name: "我的内容", icon: User, path: "/my-content" },
+    { name: "词典", icon: Book, path: "/dictionary" },
     { name: "设置", icon: Settings, path: "/settings" },
   ]
 

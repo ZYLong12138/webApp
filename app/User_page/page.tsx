@@ -80,9 +80,9 @@ export default function UserPage() {
       <div className="min-h-screen bg-gray-50 p-4">
         {/* Top navigation */}
         <div className="container mx-auto max-w-4xl flex justify-between items-center mb-6">
-          <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/book_select")}>
+          <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/")}>
             <ArrowLeft className="h-4 w-4" />
-            返回词书选择
+            返回首页
           </Button>
           <Button variant="ghost" size="icon">
             <Settings className="h-5 w-5" />
@@ -112,4 +112,3 @@ export default function UserPage() {
     </ThemeProvider>
   )
 }
-

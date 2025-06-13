@@ -1,8 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { BookPlus, BookCheck, Loader2 } from "lucide-react"
+import { BookPlus, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
   addToUserVocabulary,
@@ -20,33 +22,54 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
+import type { VariantProps } from "class-variance-authority"
+import type { buttonVariants } from "@/components/ui/button"
+import { Star } from "lucide-react"
 
-interface AddToVocabularyButtonProps {
+interface AddToVocabularyButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   wordId: string | number
   word: string
-  variant?: "default" | "outline" | "secondary" | "ghost" | "link" | "destructive"
-  size?: "default" | "sm" | "lg" | "icon"
-  className?: string
+  definition?: string
+  pronunciation?: string
+  simpleStarOnly?: boolean
+  isInVocabulary?: boolean
+  isStatusLoading?: boolean
+  onToggleSuccess?: (newStatus: boolean) => void
   onSuccess?: () => void
 }
 
 export function AddToVocabularyButton({
+  className,
+  variant,
+  size,
   wordId,
   word,
-  variant = "outline",
-  size = "sm",
-  className = "",
+  definition,
+  pronunciation,
+  simpleStarOnly = false,
+  isInVocabulary: propIsInVocabulary,
+  isStatusLoading,
+  onToggleSuccess,
   onSuccess,
+  ...props
 }: AddToVocabularyButtonProps) {
   const { toast } = useToast()
-  const [isInVocabulary, setIsInVocabulary] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isInVocabulary, setIsInVocabulary] = useState(propIsInVocabulary || false)
+  const [isLoading, setIsLoading] = useState(isStatusLoading !== undefined ? isStatusLoading : true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [notes, setNotes] = useState("")
 
   // 检查单词是否已在生词本中
   useEffect(() => {
+    if (propIsInVocabulary !== undefined) {
+      setIsInVocabulary(propIsInVocabulary)
+      return
+    }
+
     const checkVocabularyStatus = async () => {
       setIsLoading(true)
       try {
@@ -60,7 +83,21 @@ export function AddToVocabularyButton({
     }
 
     checkVocabularyStatus()
-  }, [wordId])
+  }, [wordId, propIsInVocabulary])
+
+  // 当外部 propIsInVocabulary 变化时更新内部状态
+  useEffect(() => {
+    if (propIsInVocabulary !== undefined) {
+      setIsInVocabulary(propIsInVocabulary)
+    }
+  }, [propIsInVocabulary])
+
+  // 当外部 isStatusLoading 变化时更新内部状态
+  useEffect(() => {
+    if (isStatusLoading !== undefined) {
+      setIsLoading(isStatusLoading)
+    }
+  }, [isStatusLoading])
 
   // 处理添加到生词本
   const handleAddToVocabulary = async () => {
@@ -69,6 +106,9 @@ export function AddToVocabularyButton({
       const success = await addToUserVocabulary(wordId, notes)
       if (success) {
         setIsInVocabulary(true)
+        if (onToggleSuccess) {
+          onToggleSuccess(true)
+        }
         toast({
           title: "添加成功",
           description: `"${word}" 已添加到您的生词本`,
@@ -103,6 +143,9 @@ export function AddToVocabularyButton({
       const success = await removeFromUserVocabulary(wordId)
       if (success) {
         setIsInVocabulary(false)
+        if (onToggleSuccess) {
+          onToggleSuccess(false)
+        }
         toast({
           title: "移除成功",
           description: `"${word}" 已从您的生词本中移除`,
@@ -137,22 +180,31 @@ export function AddToVocabularyButton({
     )
   }
 
-  if (isInVocabulary) {
+  // 删除这行代码，这是导致按钮消失的原因
+  // if (isInVocabulary) {
+  //   return null
+  // }
+
+  if (simpleStarOnly) {
     return (
       <Button
-        variant={variant}
+        variant="ghost"
         size={size}
-        className={`${className} text-green-600 border-green-600 hover:bg-green-50`}
-        onClick={handleRemoveFromVocabulary}
-        disabled={isProcessing}
+        onClick={isInVocabulary ? handleRemoveFromVocabulary : handleAddToVocabulary}
+        className={cn(
+          isInVocabulary ? "text-yellow-500 hover:text-yellow-600" : "text-gray-400 hover:text-gray-500",
+          "p-0 h-auto min-w-0 bg-transparent hover:bg-transparent",
+          className,
+        )}
+        disabled={isLoading || isProcessing}
+        {...props}
       >
-        {isProcessing ? (
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : isProcessing ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <>
-            <BookCheck className="h-4 w-4 mr-1" />
-            已加入生词本
-          </>
+          <Star className="h-4 w-4" fill={isInVocabulary ? "currentColor" : "none"} />
         )}
       </Button>
     )

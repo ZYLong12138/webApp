@@ -207,9 +207,9 @@ export default function PersonalVocabularyPage() {
         {/* 顶部导航 */}
         <div className="container mx-auto pt-4 px-4">
           <div className="flex justify-between items-center mb-6">
-            <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/word_list")}>
+            <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/my-content")}>
               <ArrowLeft className="h-4 w-4" />
-              返回词库
+              返回我的内容
             </Button>
           </div>
 

@@ -11,10 +11,11 @@ import type { VocabularyWord } from "@/types/vocabulary"
 
 /**
  * 获取用户的复习队列
+ * @param bookId 可选的词书ID，用于过滤特定词书的单词
  * @param limit 限制返回的数量
  * @returns 复习队列项目数组
  */
-export async function getReviewQueue(limit = 100): Promise<ReviewQueueItem[]> {
+export async function getReviewQueue(bookId?: string | number, limit = 100): Promise<ReviewQueueItem[]> {
   try {
     // 获取当前用户ID
     const {
@@ -31,19 +32,53 @@ export async function getReviewQueue(limit = 100): Promise<ReviewQueueItem[]> {
     const today = new Date()
     today.setHours(23, 59, 59, 999) // 设置为今天的最后一刻
 
-    const { data, error } = await supabase
+    // 如果指定了词书ID，先获取该词书包含的单词ID
+    let wordIds: number[] | null = null
+    if (bookId) {
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error(`Error fetching word IDs for book ${bookId}:`, mappingError)
+        throw mappingError
+      }
+
+      if (!mappingData || mappingData.length === 0) {
+        console.log(`No words found for book ${bookId}`)
+        return []
+      }
+
+      wordIds = mappingData.map((item) => item.word_id)
+      console.log(`Found ${wordIds.length} words for book ${bookId}`)
+    }
+
+    // 构建查询
+    let query = supabase
       .from("review_queue")
       .select("*")
       .eq("user_id", userId)
       .lte("next_review_date", today.toISOString())
       .order("next_review_date", { ascending: true })
-      .limit(limit)
+
+    // 如果有词书过滤，添加条件
+    if (wordIds) {
+      query = query.in("word_id", wordIds)
+    }
+
+    // 限制返回数量
+    query = query.limit(limit)
+
+    // 执行查询
+    const { data, error } = await query
 
     if (error) {
       console.error("Error fetching review queue:", error)
       throw error
     }
 
+    console.log(`Retrieved ${data?.length || 0} review queue items`)
     return data || []
   } catch (error) {
     console.error("Error in getReviewQueue:", error)
@@ -88,10 +123,14 @@ export async function getAllReviewQueueItems(): Promise<ReviewQueueItem[]> {
 
 /**
  * 获取复习队列中的单词详情
+ * @param bookId 可选的词书ID，用于过滤特定词书的单词
  * @param limit 限制返回的数量
  * @returns 包含单词详情的复习队列
  */
-export async function getReviewWords(limit = 100): Promise<Array<ReviewQueueItem & VocabularyWord>> {
+export async function getReviewWords(
+  bookId?: string | number,
+  limit = 100,
+): Promise<Array<ReviewQueueItem & VocabularyWord>> {
   try {
     // 获取当前用户ID
     const {
@@ -108,28 +147,103 @@ export async function getReviewWords(limit = 100): Promise<Array<ReviewQueueItem
     const today = new Date()
     today.setHours(23, 59, 59, 999)
 
-    // 联合查询复习队列和单词详情
-    const { data, error } = await supabase
+    // 如果指定了词书ID，先获取该词书包含的单词ID
+    let wordIds: number[] | null = null
+    if (bookId) {
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error(`Error fetching word IDs for book ${bookId}:`, mappingError)
+        throw mappingError
+      }
+
+      if (!mappingData || mappingData.length === 0) {
+        console.log(`No words found for book ${bookId}`)
+        return []
+      }
+
+      wordIds = mappingData.map((item) => item.word_id)
+      console.log(`Found ${wordIds.length} words for book ${bookId}`)
+    }
+
+    // 构建查询
+    let query = supabase
       .from("review_queue")
-      .select(`
-        *,
-        word:word_id(*)
-      `)
+      .select("*")
       .eq("user_id", userId)
       .lte("next_review_date", today.toISOString())
       .order("next_review_date", { ascending: true })
-      .limit(limit)
 
-    if (error) {
-      console.error("Error fetching review words:", error)
-      throw error
+    // 如果有词书过滤，添加条件
+    if (wordIds) {
+      query = query.in("word_id", wordIds)
     }
 
-    // 处理返回的数据格式
-    return (data || []).map((item) => ({
-      ...item,
-      ...item.word,
-    }))
+    // 限制返回数量
+    query = query.limit(limit)
+
+    // 执行查询
+    const { data: reviewData, error: reviewError } = await query
+
+    if (reviewError) {
+      console.error("Error fetching review queue:", reviewError)
+      throw reviewError
+    }
+
+    if (!reviewData || reviewData.length === 0) {
+      console.log("No review items found")
+      return []
+    }
+
+    // 获取单词ID列表
+    const reviewWordIds = reviewData.map((item) => item.word_id)
+
+    // 获取单词详情
+    const { data: wordsData, error: wordsError } = await supabase.from("word_list").select("*").in("id", reviewWordIds)
+
+    if (wordsError) {
+      console.error("Error fetching words data:", wordsError)
+      throw wordsError
+    }
+
+    // 获取单词与词书的映射关系
+    const { data: mappingData, error: mappingError } = await supabase
+      .from("book_word_mapping")
+      .select("*")
+      .in("word_id", reviewWordIds)
+
+    if (mappingError) {
+      console.error("Error fetching book-word mapping:", mappingError)
+      throw mappingError
+    }
+
+    // 合并数据
+    const result = reviewData
+      .map((reviewItem) => {
+        // 查找单词详情
+        const wordData = wordsData.find((word) => word.id === reviewItem.word_id)
+        if (!wordData) {
+          console.warn(`Word data not found for word_id: ${reviewItem.word_id}`)
+          return null
+        }
+
+        // 查找该单词所属的所有词书
+        const bookMappings = mappingData.filter((mapping) => mapping.word_id === reviewItem.word_id)
+        const bookIds = bookMappings.map((mapping) => mapping.book_id)
+
+        return {
+          ...reviewItem,
+          ...wordData,
+          bookIds: bookIds, // 添加单词所属的词书ID数组
+        }
+      })
+      .filter((item) => item !== null)
+
+    console.log(`Retrieved ${result.length} review words with details`)
+    return result
   } catch (error) {
     console.error("Error in getReviewWords:", error)
     return []
@@ -168,7 +282,7 @@ export async function addToReviewQueue(wordId: string | number, initialInterval 
       .eq("word_id", wordId)
       .maybeSingle() // 使用maybeSingle代替single
 
-    if (checkError) {
+    if (checkError && checkError.code !== "PGRST116") {
       console.error("Error checking existing review item:", checkError)
       throw checkError
     }
@@ -459,9 +573,10 @@ export async function batchSubmitReviewResults(
 
 /**
  * 获取复习计划统计信息
+ * @param bookId 可选的词书ID，用于获取特定词书的复习计划
  * @returns 复习计划统计
  */
-export async function getReviewPlan(): Promise<ReviewPlan> {
+export async function getReviewPlan(bookId?: string | number): Promise<ReviewPlan> {
   try {
     // 获取当前用户ID
     const {
@@ -485,20 +600,55 @@ export async function getReviewPlan(): Promise<ReviewPlan> {
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    // 获取今天到期的复习项数量
-    const { count: dueCount, error: dueError } = await supabase
+    // 如果指定了词书ID，先获取该词书包含的单词ID
+    let wordIds: number[] | null = null
+    if (bookId) {
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error(`Error fetching word IDs for book ${bookId}:`, mappingError)
+        throw mappingError
+      }
+
+      if (!mappingData || mappingData.length === 0) {
+        console.log(`No words found for book ${bookId}`)
+        return {
+          dueToday: 0,
+          newToday: 0,
+          totalReviewed: 0,
+          streakDays: 0,
+        }
+      }
+
+      wordIds = mappingData.map((item) => item.word_id)
+      console.log(`Found ${wordIds.length} words for book ${bookId}`)
+    }
+
+    // 构建查询 - 今天到期的复习项
+    let dueQuery = supabase
       .from("review_queue")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
       .lte("next_review_date", tomorrow.toISOString())
+
+    // 如果有词书过滤，添加条件
+    if (wordIds) {
+      dueQuery = dueQuery.in("word_id", wordIds)
+    }
+
+    // 执行查询
+    const { count: dueCount, error: dueError } = await dueQuery
 
     if (dueError) {
       console.error("Error counting due items:", dueError)
       throw dueError
     }
 
-    // 获取新添加的复习项数量（今天添加且未复习过的）
-    const { count: newCount, error: newError } = await supabase
+    // 构建查询 - 今天新添加的复习项
+    let newQuery = supabase
       .from("review_queue")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
@@ -506,17 +656,33 @@ export async function getReviewPlan(): Promise<ReviewPlan> {
       .lt("created_at", tomorrow.toISOString())
       .eq("review_count", 0)
 
+    // 如果有词书过滤，添加条件
+    if (wordIds) {
+      newQuery = newQuery.in("word_id", wordIds)
+    }
+
+    // 执行查询
+    const { count: newCount, error: newError } = await newQuery
+
     if (newError) {
       console.error("Error counting new items:", newError)
       throw newError
     }
 
-    // 获取总共已复习的单词数量
-    const { count: totalCount, error: totalError } = await supabase
+    // 构建查询 - 总共已复习的单词
+    let totalQuery = supabase
       .from("review_queue")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
       .gt("review_count", 0)
+
+    // 如果有词书过滤，添加条件
+    if (wordIds) {
+      totalQuery = totalQuery.in("word_id", wordIds)
+    }
+
+    // 执行查询
+    const { count: totalCount, error: totalError } = await totalQuery
 
     if (totalError) {
       console.error("Error counting total reviewed items:", totalError)
@@ -575,5 +741,119 @@ export async function removeFromReviewQueue(wordId: string | number): Promise<bo
   } catch (error) {
     console.error("Error in removeFromReviewQueue:", error)
     return false
+  }
+}
+
+/**
+ * 获取已复习的单词
+ * @param bookId 可选的词书ID，用于过滤特定词书的单词
+ * @param fromDate 可选的起始日期，用于获取该日期之后复习的单词
+ * @returns 包含单词详情的复习队列
+ */
+export async function getReviewedWords(bookId?: string | number, fromDate?: string): Promise<VocabularyWord[]> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in")
+      return []
+    }
+
+    // 获取复习队列中的单词ID
+    let reviewQuery = supabase.from("review_queue").select("word_id").eq("user_id", userId).gt("review_count", 0) // 只获取已复习过的单词
+
+    // 如果指定了起始日期，添加日期过滤
+    if (fromDate) {
+      reviewQuery = reviewQuery.gte("last_review_date", fromDate)
+    }
+
+    const { data: reviewData, error: reviewError } = await reviewQuery
+
+    if (reviewError) {
+      console.error("Error fetching reviewed words:", reviewError)
+      throw reviewError
+    }
+
+    if (!reviewData || reviewData.length === 0) {
+      console.log("No reviewed words found")
+      return []
+    }
+
+    // 提取单词ID
+    const wordIds = reviewData.map((item) => item.word_id)
+
+    // 获取单词详情
+    const { data: wordsData, error: wordsError } = await supabase.from("word_list").select("*").in("id", wordIds)
+
+    if (wordsError) {
+      console.error("Error fetching word details:", wordsError)
+      throw wordsError
+    }
+
+    // 如果指定了词书ID，过滤单词
+    if (bookId) {
+      // 获取词书中的单词ID
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error("Error fetching book word mappings:", mappingError)
+        throw mappingError
+      }
+
+      if (mappingData && mappingData.length > 0) {
+        const bookWordIds = mappingData.map((item) => item.word_id)
+        // 只保留同时在词书和复习队列中的单词
+        return wordsData.filter((word) => bookWordIds.includes(word.id))
+      }
+
+      return []
+    }
+
+    // 获取单词的掌握程度
+    const { data: masteryData, error: masteryError } = await supabase
+      .from("word_mastery")
+      .select("*")
+      .eq("user_id", userId)
+      .in("word_id", wordIds)
+
+    if (masteryError) {
+      console.error("Error fetching mastery data:", masteryError)
+      // 如果获取掌握程度失败，仍然返回单词数据，但掌握程度默认为0
+      return wordsData.map((word) => ({
+        ...word,
+        mastery_level: 0,
+        last_reviewed: null,
+      }))
+    }
+
+    // 创建掌握程度查找表
+    const masteryMap = new Map()
+    masteryData?.forEach((mastery) => {
+      masteryMap.set(mastery.word_id, {
+        mastery_level: mastery.mastery_level,
+        last_reviewed: mastery.last_reviewed,
+      })
+    })
+
+    // 合并单词数据和掌握程度
+    return wordsData.map((word) => {
+      const mastery = masteryMap.get(word.id)
+      return {
+        ...word,
+        mastery_level: mastery ? mastery.mastery_level : 0,
+        last_reviewed: mastery ? mastery.last_reviewed : null,
+        has_mastery_data: !!mastery,
+      }
+    })
+  } catch (error) {
+    console.error("Error in getReviewedWords:", error)
+    return []
   }
 }

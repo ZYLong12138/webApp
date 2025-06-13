@@ -27,9 +27,11 @@ export function DictationButton({
 
   // 处理按钮点击，跳转到默写页面
   const handleClick = () => {
-    // 如果有词书ID，则作为查询参数传递
-    if (bookId) {
+    // 如果有词书ID和关卡，则作为查询参数传递
+    if (bookId && level) {
       router.push(`/dictation?bookId=${bookId}&level=${level}`)
+    } else if (bookId) {
+      router.push(`/dictation?bookId=${bookId}&level=1`)
     } else {
       router.push("/dictation")
     }
@@ -47,4 +49,3 @@ export function DictationButton({
     </Button>
   )
 }
-

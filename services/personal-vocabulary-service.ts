@@ -294,3 +294,52 @@ export async function isInUserVocabulary(wordId: string | number): Promise<boole
     return false
   }
 }
+
+// 批量获取用户生词本状态
+export async function getBatchUserVocabularyStatus(
+  wordIds: (string | number)[],
+): Promise<Record<string | number, boolean>> {
+  try {
+    // 如果没有单词ID，返回空对象
+    if (!wordIds.length) return {}
+
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in")
+      return {}
+    }
+
+    // 从user_vocabulary_words表批量获取用户的生词状态
+    const { data, error } = await supabase
+      .from("user_vocabulary_words")
+      .select("word_id")
+      .eq("user_id", userId)
+      .in("word_id", wordIds)
+
+    if (error) {
+      console.error("Error fetching user vocabulary status:", error)
+      throw error
+    }
+
+    // 创建结果对象，默认所有单词都不在生词本中
+    const result: Record<string | number, boolean> = {}
+    wordIds.forEach((id) => {
+      result[id] = false
+    })
+
+    // 更新在生词本中的单词状态
+    data.forEach((item) => {
+      result[item.word_id] = true
+    })
+
+    return result
+  } catch (error) {
+    console.error("Error in getBatchUserVocabularyStatus:", error)
+    return {}
+  }
+}

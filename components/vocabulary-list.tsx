@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Trash2, BookOpen, Library } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +28,24 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 
 // 添加导入语句
 import { AddToVocabularyButton } from "@/components/add-to-vocabulary-button"
+import { getBatchUserVocabularyStatus } from "@/services/personal-vocabulary-service"
+import { VocabularyVisibilityControls } from "@/components/vocabulary-visibility-controls"
+
+// 定义缓存数据的接口
+interface CachedVocabularyData {
+  words: VocabularyWord[]
+  timestamp: number
+  totalCount: number
+}
+
+// 缓存过期时间（24小时）
+const CACHE_EXPIRY_TIME = 24 * 60 * 60 * 1000
+
+// 缓存键前缀
+const CACHE_PREFIX = "vocabulary-cache-v2-"
+
+// 最后访问的缓存键
+const LAST_VISITED_KEY = "vocabulary-last-visited"
 
 // 定义传入 props 的类型
 interface VocabularyListProps {
@@ -35,6 +53,7 @@ interface VocabularyListProps {
   onWordDeleted: () => void // 删除单词后的回调函数
   bookId?: string // 可选的词书ID，默认为"my-vocabulary"
   level?: number // 当前关卡
+  starButtonStyle?: "default" | "simple" // 生词本按钮样式
 }
 
 // 主组件函数
@@ -43,6 +62,7 @@ export function VocabularyList({
   onWordDeleted,
   bookId = "my-vocabulary",
   level = 1,
+  starButtonStyle = "default",
 }: VocabularyListProps) {
   const { toast } = useToast() // 获取提示框功能
   const [deletingId, setDeletingId] = useState<string | null>(null) // 追踪当前正在删除的单词的 id
@@ -61,34 +81,201 @@ export function VocabularyList({
     return {}
   })
 
+  const [favoriteStatus, setFavoriteStatus] = useState<Record<string | number, boolean>>({})
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true)
+
+  // 使用 CSS 类名而不是条件渲染来提高响应速度
+  const [visibilityClasses, setVisibilityClasses] = useState({
+    word: "",
+    pronunciation: "",
+    definition: "",
+  })
+
+  // 获取缓存键
+  const getCacheKey = useCallback(
+    (isLevelSpecific = false) => {
+      return isLevelSpecific ? `${CACHE_PREFIX}${bookId}-level-${level}` : `${CACHE_PREFIX}${bookId}-all`
+    },
+    [bookId, level],
+  )
+
+  // 从缓存中获取数据
+  const getDataFromCache = useCallback(
+    (isLevelSpecific = false) => {
+      if (typeof window === "undefined") return null
+
+      const cacheKey = getCacheKey(isLevelSpecific)
+      const cachedData = localStorage.getItem(cacheKey)
+
+      if (!cachedData) return null
+
+      try {
+        const parsedData: CachedVocabularyData = JSON.parse(cachedData)
+        const now = Date.now()
+
+        // 检查缓存是否过期
+        if (now - parsedData.timestamp > CACHE_EXPIRY_TIME) {
+          localStorage.removeItem(cacheKey)
+          return null
+        }
+
+        return parsedData
+      } catch (error) {
+        console.error("解析缓存数据失败:", error)
+        localStorage.removeItem(cacheKey)
+        return null
+      }
+    },
+    [getCacheKey],
+  )
+
+  // 将数据保存到缓存
+  const saveDataToCache = useCallback(
+    (data: VocabularyWord[], count: number, isLevelSpecific = false) => {
+      if (typeof window === "undefined" || data.length === 0) return
+
+      const cacheData: CachedVocabularyData = {
+        words: data,
+        timestamp: Date.now(),
+        totalCount: count,
+      }
+
+      try {
+        const cacheKey = getCacheKey(isLevelSpecific)
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+        console.log(`缓存已更新: ${cacheKey}`)
+      } catch (error) {
+        // 如果存储失败（可能是因为超出存储限制），尝试清除旧缓存
+        console.error("缓存存储失败，尝试清除旧缓存:", error)
+        clearOldCaches()
+        // 再次尝试存储
+        try {
+          localStorage.setItem(getCacheKey(isLevelSpecific), JSON.stringify(cacheData))
+        } catch (e) {
+          console.error("再次尝试缓存失败:", e)
+        }
+      }
+    },
+    [getCacheKey],
+  )
+
+  // 清除旧缓存
+  const clearOldCaches = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const now = Date.now()
+    const keysToRemove: string[] = []
+
+    // 查找所有以缓存前缀开头的项
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(CACHE_PREFIX)) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || "")
+          // 如果缓存超过12小时，或者不是当前正在查看的内容，则删除
+          if (now - data.timestamp > 12 * 60 * 60 * 1000 || (key !== getCacheKey(true) && key !== getCacheKey(false))) {
+            keysToRemove.push(key)
+          }
+        } catch (e) {
+          // 如果解析失败，也删除
+          keysToRemove.push(key)
+        }
+      }
+    }
+
+    // 删除收集到的键
+    keysToRemove.forEach((key) => {
+      localStorage.removeItem(key)
+      console.log(`已清除旧缓存: ${key}`)
+    })
+  }, [getCacheKey])
+
+  // 检查是否有最后访问的页面
+  useEffect(() => {
+    if (typeof window === "undefined" || initialWords) return
+
+    const lastVisited = localStorage.getItem(LAST_VISITED_KEY)
+    if (!lastVisited) return
+
+    try {
+      const lastVisitedData = JSON.parse(lastVisited)
+      // 如果最后访问的是同一本书和同一关卡，自动恢复状态
+      if (lastVisitedData.bookId === bookId && lastVisitedData.level === level) {
+        // 只有在30分钟内的访问才自动恢复
+        const thirtyMinutes = 30 * 60 * 1000
+        if (Date.now() - lastVisitedData.timestamp < thirtyMinutes) {
+          setShowAllWords(lastVisitedData.showAllWords)
+          setCurrentPage(lastVisitedData.currentPage)
+          console.log("恢复上次访问状态")
+        }
+      }
+    } catch (error) {
+      console.error("解析最后访问数据失败:", error)
+    }
+  }, [bookId, level, initialWords])
+
   // 获取总单词数量和当前页的单词
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
-      try {
-        // 获取总单词数量
-        const count = await getBookWordCount(bookId)
-        setTotalWordCount(count)
 
-        // 如果没有提供初始单词数据，则通过API获取
-        if (!initialWords) {
+      // 记录最后访问的页面信息
+      if (typeof window !== "undefined") {
+        localStorage.setItem(
+          LAST_VISITED_KEY,
+          JSON.stringify({
+            bookId,
+            level,
+            showAllWords,
+            currentPage,
+            timestamp: Date.now(),
+          }),
+        )
+      }
+
+      try {
+        // 如果提供了初始单词数据，直接使用它
+        if (initialWords) {
+          setWords(initialWords)
+          setTotalWordCount(initialWords.length)
+          setIsLoading(false)
+          return
+        }
+
+        let wordData: VocabularyWord[] = []
+        let count = 0
+
+        // 尝试从缓存获取数据
+        const isLevelSpecific = !showAllWords && level !== undefined
+        const cachedData = getDataFromCache(isLevelSpecific)
+
+        if (cachedData) {
+          // 使用缓存数据
+          wordData = cachedData.words
+          count = cachedData.totalCount
+          console.log("使用缓存的词表数据")
+        } else {
+          // 从服务器获取数据
+          count = await getBookWordCount(bookId)
+
           if (showAllWords) {
             // 显示所有单词
-            const allWords = await getVocabularyWords(bookId)
-            setWords(allWords)
+            wordData = await getVocabularyWords(bookId)
+            saveDataToCache(wordData, count, false)
           } else if (level) {
             // 显示当前关卡的单词
-            const levelWords = await getWordsByLevel(bookId, level)
-            setWords(levelWords)
+            wordData = await getWordsByLevel(bookId, level)
+            saveDataToCache(wordData, count, true)
           } else {
             // 如果没有指定关卡，则按页获取
-            const pageWords = await getVocabularyWords(bookId, currentPage, wordsPerPage)
-            setWords(pageWords)
+            wordData = await getVocabularyWords(bookId, currentPage, wordsPerPage)
+            // 不缓存分页数据，因为可能会频繁变化
           }
-        } else {
-          // 如果提供了初始单词数据，使用它
-          setWords(initialWords)
+          console.log("从服务器获取词表数据")
         }
+
+        setWords(wordData)
+        setTotalWordCount(count)
       } catch (error) {
         console.error("获取单词数据失败:", error)
         toast({
@@ -104,7 +291,7 @@ export function VocabularyList({
     }
 
     fetchData()
-  }, [bookId, currentPage, initialWords, toast, level, showAllWords])
+  }, [bookId, currentPage, initialWords, toast, level, showAllWords, getDataFromCache, saveDataToCache])
 
   // Save highlights to localStorage when they change
   useEffect(() => {
@@ -112,6 +299,27 @@ export function VocabularyList({
       localStorage.setItem(`wordHighlights-${bookId}-${level}`, JSON.stringify(wordHighlights))
     }
   }, [wordHighlights, bookId, level])
+
+  // 批量获取收藏状态
+  useEffect(() => {
+    const fetchFavoriteStatus = async () => {
+      if (!words.length) return
+
+      setIsFavoritesLoading(true)
+      try {
+        // 从 personal-vocabulary-service.ts 导入这个新函数
+        const wordIds = words.map((word) => word.id)
+        const statuses = await getBatchUserVocabularyStatus(wordIds)
+        setFavoriteStatus(statuses)
+      } catch (error) {
+        console.error("获取收藏状态失败:", error)
+      } finally {
+        setIsFavoritesLoading(false)
+      }
+    }
+
+    fetchFavoriteStatus()
+  }, [words])
 
   // 计算总页数
   const totalPages = Math.ceil(totalWordCount / wordsPerPage)
@@ -135,6 +343,22 @@ export function VocabularyList({
       if (words.length === 1 && currentPage > 1) {
         setCurrentPage((prev) => prev - 1)
       }
+
+      // 删除后更新缓存
+      const isLevelSpecific = !showAllWords && level !== undefined
+      const cacheKey = getCacheKey(isLevelSpecific)
+      const cachedData = localStorage.getItem(cacheKey)
+
+      if (cachedData) {
+        try {
+          const parsedData: CachedVocabularyData = JSON.parse(cachedData)
+          const updatedWords = parsedData.words.filter((word) => word.id !== id)
+          saveDataToCache(updatedWords, parsedData.totalCount - 1, isLevelSpecific)
+        } catch (error) {
+          console.error("更新缓存失败:", error)
+        }
+      }
+
       onWordDeleted() // 调用父组件的删除回调
     } catch (error) {
       // 删除失败时显示错误提示
@@ -174,22 +398,44 @@ export function VocabularyList({
   // 处理切换单词视图
   const handleToggleWordView = async () => {
     setIsLoading(true)
-    setShowAllWords(!showAllWords)
+    const newShowAllWords = !showAllWords
+    setShowAllWords(newShowAllWords)
 
     try {
-      if (!showAllWords) {
+      // 尝试从缓存获取数据
+      const isLevelSpecific = !newShowAllWords && level !== undefined
+      const cachedData = getDataFromCache(isLevelSpecific)
+
+      if (cachedData) {
+        // 使用缓存数据
+        setWords(cachedData.words)
+        setTotalWordCount(cachedData.totalCount)
+        setIsLoading(false)
+        return
+      }
+
+      // 如果没有缓存，从服务器获取
+      if (newShowAllWords) {
         // 切换到显示所有单词
         const allWords = await getVocabularyWords(bookId)
         setWords(allWords)
+        const count = await getBookWordCount(bookId)
+        setTotalWordCount(count)
+        saveDataToCache(allWords, count, false)
       } else {
         // 切换回显示当前关卡单词
         if (level) {
           const levelWords = await getWordsByLevel(bookId, level)
           setWords(levelWords)
+          const count = await getBookWordCount(bookId)
+          setTotalWordCount(count)
+          saveDataToCache(levelWords, count, true)
         } else {
           // 如果没有指定关卡，则按页获取
           const pageWords = await getVocabularyWords(bookId, currentPage, wordsPerPage)
           setWords(pageWords)
+          const count = await getBookWordCount(bookId)
+          setTotalWordCount(count)
         }
       }
     } catch (error) {
@@ -204,7 +450,7 @@ export function VocabularyList({
     }
   }
 
-  // Replace the entire handleRowClick function with this:
+  // 处理行点击
   const handleRowClick = (wordId: string | number) => {
     setWordHighlights((prev) => {
       const currentLevel = prev[wordId] || 0
@@ -217,7 +463,7 @@ export function VocabularyList({
     })
   }
 
-  // Replace the getHighlightColor function with this:
+  // 获取高亮颜色
   const getHighlightColor = (level: number) => {
     switch (level) {
       case 1:
@@ -233,8 +479,21 @@ export function VocabularyList({
     }
   }
 
+  // 处理可见性切换 - 使用 CSS 类名而不是条件渲染
+  const handleVisibilityChange = useCallback((type: "word" | "pronunciation" | "definition", visible: boolean) => {
+    setVisibilityClasses((prev) => ({
+      ...prev,
+      [type]: visible ? "" : "vocabulary-hidden",
+    }))
+  }, [])
+
   return (
     <Card>
+      <VocabularyVisibilityControls
+        onToggleWord={(visible) => handleVisibilityChange("word", visible)}
+        onTogglePronunciation={(visible) => handleVisibilityChange("pronunciation", visible)}
+        onToggleDefinition={(visible) => handleVisibilityChange("definition", visible)}
+      />
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>我的词库 ({isLoading ? "加载中..." : totalWordCount})</CardTitle>
         <Button
@@ -271,7 +530,6 @@ export function VocabularyList({
           <>
             {/* 如果有单词，渲染表格 */}
             <Table>
-              {/* Replace the TableHeader section with this: */}
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[60px]">#</TableHead>
@@ -281,7 +539,6 @@ export function VocabularyList({
                   <TableHead className="w-[80px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
-              {/* Replace the TableBody section with this: */}
               <TableBody>
                 {words.map((word, index) => {
                   // Get highlight level from state or default to 0
@@ -297,11 +554,22 @@ export function VocabularyList({
                         {index + 1}
                       </TableCell>
                       <TableCell>
-                        <div className="font-bold text-blue-600">{word.word}</div>
+                        <div className={`font-bold text-blue-600 ${visibilityClasses.word}`}>{word.word}</div>
                         {/* Display only one phonetic pronunciation if available */}
-                        {word.pronunciation && <div className="text-sm text-gray-600 mt-1">{word.pronunciation}</div>}
+                        {word.pronunciation && (
+                          <div className={`text-sm text-gray-600 mt-1 ${visibilityClasses.pronunciation}`}>
+                            {word.pronunciation}
+                          </div>
+                        )}
                       </TableCell>
-                      <TableCell className="max-w-[300px] truncate">{word.definition}</TableCell>
+                      <TableCell className="max-w-[300px]">
+                        <div
+                          className={`truncate ${visibilityClasses.definition}`}
+                          style={{ display: "inline-block", maxWidth: "100%" }}
+                        >
+                          {word.definition}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {/* Mastery level display */}
                         {(word as any).has_mastery_data ? (
@@ -325,13 +593,40 @@ export function VocabularyList({
                       <TableCell>
                         {/* 在 TableRow 中的操作列中添加"添加到生词本"按钮 */}
                         {/* 在 <TableCell> 中的 <AlertDialog> 前添加 */}
-                        <AddToVocabularyButton
-                          wordId={word.id}
-                          word={word.word}
-                          variant="ghost"
-                          size="icon"
-                          className="mr-1"
-                        />
+                        {starButtonStyle === "simple" ? (
+                          <AddToVocabularyButton
+                            wordId={word.id}
+                            word={word.word}
+                            variant="ghost"
+                            size="icon"
+                            className="mr-1"
+                            simpleStarOnly={true}
+                            isInVocabulary={favoriteStatus[word.id] || false}
+                            isStatusLoading={isFavoritesLoading}
+                            onToggleSuccess={(newStatus) => {
+                              setFavoriteStatus((prev) => ({
+                                ...prev,
+                                [word.id]: newStatus,
+                              }))
+                            }}
+                          />
+                        ) : (
+                          <AddToVocabularyButton
+                            wordId={word.id}
+                            word={word.word}
+                            variant="ghost"
+                            size="icon"
+                            className="mr-1"
+                            isInVocabulary={favoriteStatus[word.id] || false}
+                            isStatusLoading={isFavoritesLoading}
+                            onToggleSuccess={(newStatus) => {
+                              setFavoriteStatus((prev) => ({
+                                ...prev,
+                                [word.id]: newStatus,
+                              }))
+                            }}
+                          />
+                        )}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button

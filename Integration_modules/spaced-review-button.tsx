@@ -2,75 +2,69 @@
 
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Clock } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getReviewPlan } from "@/services/review-service"
-import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 interface SpacedReviewButtonProps {
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
+  bookId: string
+  count?: number
+  isLoading?: boolean
+  disabled?: boolean
+  variant?: "default" | "outline" | "secondary" | "ghost" | "link" | "destructive"
   size?: "default" | "sm" | "lg" | "icon"
   className?: string
-  buttonText?: string // 可自定义按钮文本
-  showIcon?: boolean // 是否显示图标
-  showCount?: boolean // 是否显示待复习数量
-  bookId?: string // 添加词书ID参数
-  count?: number // 直接传入待复习数量，而不是从API获取
 }
 
 export function SpacedReviewButton({
+  bookId,
+  count = 0,
+  isLoading = false,
+  disabled = false,
   variant = "outline",
   size = "default",
-  className = "",
-  buttonText = "待复习",
-  showIcon = true,
-  showCount = true,
-  bookId,
-  count,
+  className,
 }: SpacedReviewButtonProps) {
   const router = useRouter()
-  const [dueCount, setDueCount] = useState<number | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isButtonLoading, setIsButtonLoading] = useState(isLoading)
 
-  // 获取待复习单词数量
+  // 当外部isLoading或count属性变化时更新按钮状态
   useEffect(() => {
-    if (count !== undefined) {
-      setDueCount(count)
-      return
+    // 如果count为0，不再显示加载状态
+    if (count === 0) {
+      setIsButtonLoading(false)
+    } else {
+      setIsButtonLoading(isLoading)
     }
+  }, [isLoading, count])
 
-    const fetchReviewPlan = async () => {
-      try {
-        const plan = await getReviewPlan()
-        setDueCount(plan.dueToday)
-      } catch (error) {
-        console.error("获取复习计划失败:", error)
-      }
-    }
-
-    fetchReviewPlan()
-  }, [count])
-
-  // 处理按钮点击，跳转到间隔复习页面
   const handleClick = () => {
-    setIsLoading(true)
-    const url = bookId ? `/spaced-review?bookId=${bookId}` : "/spaced-review"
-    router.push(url)
+    router.push(`/spaced-review?bookId=${bookId}`)
   }
 
   return (
     <Button
       variant={variant}
       size={size}
-      className={`${className} ${showIcon ? "flex items-center gap-2" : ""}`}
       onClick={handleClick}
-      disabled={isLoading}
+      className={cn(
+        "flex items-center gap-1",
+        className,
+        // 添加橙色边框样式
+        "border-amber-500 text-amber-600 hover:bg-amber-50",
+        // 禁用状态时的样式
+        disabled || count === 0
+          ? "opacity-50 cursor-not-allowed border-gray-300 text-gray-400 hover:bg-transparent"
+          : "",
+      )}
+      disabled={isButtonLoading || disabled || count === 0}
     >
-      {showIcon && <Clock className="h-4 w-4" />}
-      {buttonText}
-      {showCount && dueCount !== null && dueCount > 0 && (
-        <Badge variant="secondary" className="ml-1 bg-red-100 text-red-800 hover:bg-red-200">
-          {dueCount}
+      <Clock className="h-4 w-4" />
+      <span>待复习</span>
+      {count > 0 && (
+        <Badge variant="secondary" className="ml-1 px-1 min-w-5 text-center bg-amber-100 text-amber-800">
+          {count}
         </Badge>
       )}
     </Button>

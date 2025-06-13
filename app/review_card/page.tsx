@@ -1,17 +1,29 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRef } from "react"
+
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ThemeProvider as ShadcnThemeProvider } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, ArrowRight, Shuffle, SortAsc, Loader2 } from "lucide-react"
-import { getVocabularyWords } from "@/services/vocabulary-service"
+import { ArrowLeft, ArrowRight, Shuffle, SortAsc, Loader2, Layers } from "lucide-react"
+import { getVocabularyWords, getWordsByLevel, getBookWordCount } from "@/services/vocabulary-service"
 import type { VocabularyWord } from "@/types/vocabulary"
 import { motion, AnimatePresence } from "framer-motion"
 import { ThemeSwitcherButton } from "@/Integration_modules/theme-switcher-button"
 import { useTheme } from "@/contexts/theme-context"
+import { LevelSelectionModal } from "@/components/level-selection-modal"
+import { DictationButton } from "@/Integration_modules/dictation-button"
+
+// 用于存储已复习单词的sessionStorage键名
+const REVIEWED_WORDS_KEY = "recently_reviewed_words"
 
 export default function ReviewCardPage() {
+  const searchParams = useSearchParams()
+  const bookId = searchParams.get("bookId")
+  const level = searchParams.get("level") ? Number.parseInt(searchParams.get("level")!) : undefined
+  const fromReview = searchParams.get("from") === "review"
+
   const router = useRouter()
   const { theme } = useTheme()
   const [words, setWords] = useState<VocabularyWord[]>([])
@@ -23,6 +35,8 @@ export default function ReviewCardPage() {
   const [isShuffling, setIsShuffling] = useState(false)
   const [isSorting, setIsSorting] = useState(false)
   const [animateCards, setAnimateCards] = useState(false)
+  const [totalLevels, setTotalLevels] = useState(0)
+  const [isLevelModalOpen, setIsLevelModalOpen] = useState(false)
 
   // 网格布局参考
   const gridRef = useRef<HTMLDivElement>(null)
@@ -37,13 +51,62 @@ export default function ReviewCardPage() {
   // 获取当前页的单词
   const currentWords = words.slice((currentPage - 1) * cardsPerPage, currentPage * cardsPerPage)
 
+  // 尝试从sessionStorage获取已复习的单词
+  const getReviewedWordsFromStorage = (): VocabularyWord[] | null => {
+    try {
+      const wordsJson = sessionStorage.getItem(REVIEWED_WORDS_KEY)
+      const fromReview = sessionStorage.getItem("words_from_review")
+
+      if (wordsJson && fromReview === "true") {
+        // 清除标记，确保只在从复习页面导航过来时使用这些单词
+        sessionStorage.removeItem("words_from_review")
+        return JSON.parse(wordsJson)
+      }
+      return null
+    } catch (error) {
+      console.error("获取已复习单词失败:", error)
+      return null
+    }
+  }
+
   // 获取单词数据
   useEffect(() => {
     const fetchWords = async () => {
       setIsLoading(true)
       try {
-        const data = await getVocabularyWords()
-        setWords(data)
+        // 检查是否有来自复习会话的单词
+        const reviewedWords = fromReview ? getReviewedWordsFromStorage() : null
+
+        if (reviewedWords && reviewedWords.length > 0) {
+          // 如果有来自复习会话的单词，直接使用
+          setWords(reviewedWords)
+          setTitle("刚刚复习的单词")
+          console.log(`显示${reviewedWords.length}个刚刚复习过的单词`)
+        } else {
+          // 否则按照原来的逻辑获取单词
+          let fetchedWords: VocabularyWord[] = []
+          let totalLevelsCount = 0
+
+          if (bookId && level) {
+            // 如果提供了词书ID和关卡，则获取该关卡的单词
+            fetchedWords = await getWordsByLevel(bookId, level)
+
+            // 获取总关卡数
+            const count = await getBookWordCount(bookId)
+            totalLevelsCount = Math.ceil(count / 50) // 假设每关50个单词
+            setTotalLevels(totalLevelsCount)
+
+            // 更新标题
+            setTitle(`第 ${level} 关词卡`)
+          } else {
+            // 否则使用原来的逻辑获取单词
+            const data = await getVocabularyWords()
+            fetchedWords = data
+          }
+
+          setWords(fetchedWords)
+        }
+
         setError(null)
         // 初始加载时触发波浪动画
         setTimeout(() => setAnimateCards(true), 100)
@@ -56,7 +119,7 @@ export default function ReviewCardPage() {
     }
 
     fetchWords()
-  }, [])
+  }, [bookId, level, fromReview])
 
   // 检测网格列数
   useEffect(() => {
@@ -134,28 +197,19 @@ export default function ReviewCardPage() {
     }, 100)
   }
 
-  // 处理页面导航
+  // 处理页面导航 - 下一关
   const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setAnimateCards(false)
-      setCurrentPage((prev) => prev + 1)
-      setFlippedCards(new Set()) // 重置翻转状态
-      window.scrollTo({ top: 0, behavior: "smooth" })
-
-      // 在页面切换后触发波浪动画
-      setTimeout(() => setAnimateCards(true), 100)
+    if (bookId && level && level < totalLevels) {
+      const nextLevel = level + 1
+      router.push(`/review_card?bookId=${bookId}&level=${nextLevel}`)
     }
   }
 
+  // 处理页面导航 - 上一关
   const goToPrevPage = () => {
-    if (currentPage > 1) {
-      setAnimateCards(false)
-      setCurrentPage((prev) => prev - 1)
-      setFlippedCards(new Set()) // 重置翻转状态
-      window.scrollTo({ top: 0, behavior: "smooth" })
-
-      // 在页面切换后触发波浪动画
-      setTimeout(() => setAnimateCards(true), 100)
+    if (bookId && level && level > 1) {
+      const prevLevel = level - 1
+      router.push(`/review_card?bookId=${bookId}&level=${prevLevel}`)
     }
   }
 
@@ -282,10 +336,18 @@ export default function ReviewCardPage() {
               variant="ghost"
               size="sm"
               className="flex items-center gap-1 h-8 hover:scale-105 transition-transform text-gray-600"
-              onClick={() => router.back()}
+              onClick={() => {
+                if (fromReview) {
+                  router.push("/")
+                } else if (bookId) {
+                  router.push(`/book/${bookId}`)
+                } else {
+                  router.back()
+                }
+              }}
             >
               <ArrowLeft className="h-3 w-3" />
-              返回
+              {fromReview ? "返回首页" : "返回"}
             </Button>
             <h1 className="text-lg font-bold ml-2 themed-text-primary">{title}</h1>
           </div>
@@ -310,9 +372,29 @@ export default function ReviewCardPage() {
               <SortAsc className={`h-3 w-3 ${isSorting ? "animate-bounce" : ""}`} />
               排序
             </Button>
-            <span className="px-3 py-1 bg-accent/10 text-gray-600 rounded-md text-xs font-medium border border-accent/20 shadow-sm">
-              {currentPage}/{totalPages || 1}
-            </span>
+            {bookId && level && (
+              <DictationButton
+                variant="outline"
+                size="sm"
+                bookId={bookId}
+                level={level}
+                className="h-8 text-xs"
+                buttonText="单词默写"
+              />
+            )}
+            <div className="flex items-center gap-2">
+              {bookId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsLevelModalOpen(true)}
+                  className="h-8 rounded-full bg-white/70 backdrop-blur-sm hover:bg-blue-100/70 transition-colors text-gray-600 text-xs flex items-center"
+                >
+                  <Layers className="h-3 w-3 mr-1" />
+                  切换关卡
+                </Button>
+              )}
+            </div>
             <ThemeSwitcherButton size="sm" variant="ghost" />
           </div>
         </div>
@@ -393,28 +475,56 @@ export default function ReviewCardPage() {
               </AnimatePresence>
             </div>
 
-            {/* 分页控制 */}
-            <div className="flex justify-center gap-3 mt-6 pb-4">
+            {/* 分页控制和关卡切换 */}
+            <div className="flex justify-center items-center gap-4 mt-6 pb-4">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={goToPrevPage}
-                disabled={currentPage === 1}
-                className="flex items-center h-9 bg-white/70 backdrop-blur-sm hover:bg-accent/10 transition-colors text-gray-600"
+                className={`h-10 w-10 rounded-full bg-white/70 backdrop-blur-sm hover:bg-blue-100/70 transition-colors text-gray-600 flex items-center justify-center ${
+                  bookId && level && level <= 1 ? "opacity-50" : ""
+                }`}
               >
-                <ArrowLeft className="h-3 w-3 mr-1" />
-                上一页
+                <ArrowLeft className="h-4 w-4" />
               </Button>
+
+              <div className="flex items-center gap-2">
+                {bookId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsLevelModalOpen(true)}
+                    className="h-8 rounded-full bg-white/70 backdrop-blur-sm hover:bg-blue-100/70 transition-colors text-gray-600 text-xs flex items-center"
+                  >
+                    <Layers className="h-3 w-3 mr-1" />
+                    切换关卡
+                  </Button>
+                )}
+              </div>
+
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={goToNextPage}
-                disabled={currentPage === totalPages}
-                className="flex items-center h-9 bg-white/70 backdrop-blur-sm hover:bg-accent/10 transition-colors text-gray-600"
+                className={`h-10 w-10 rounded-full bg-white/70 backdrop-blur-sm hover:bg-blue-100/70 transition-colors text-gray-600 flex items-center justify-center ${
+                  bookId && level && level >= totalLevels ? "opacity-50" : ""
+                }`}
               >
-                下一页
-                <ArrowRight className="h-3 w-3 ml-1" />
+                <ArrowRight className="h-4 w-4" />
               </Button>
+
+              {/* 关卡选择模态框 */}
+              {bookId && (
+                <LevelSelectionModal
+                  bookId={bookId}
+                  bookName={title.replace("第", "").replace("关词卡", "")}
+                  isOpen={isLevelModalOpen}
+                  onClose={() => setIsLevelModalOpen(false)}
+                  onLevelSelect={(selectedLevel) => {
+                    router.push(`/review_card?bookId=${bookId}&level=${selectedLevel}`)
+                  }}
+                />
+              )}
             </div>
           </>
         )}
@@ -422,4 +532,3 @@ export default function ReviewCardPage() {
     </ShadcnThemeProvider>
   )
 }
-

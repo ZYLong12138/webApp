@@ -8,8 +8,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { ArrowLeft, Volume2, RefreshCw, Check, X, Pause, Play, Settings } from "lucide-react"
-import { getVocabularyWords, getWordsByLevel, updateMasteryLevel } from "@/services/vocabulary-service"
+import { ArrowLeft, Volume2, RefreshCw, Check, X, Pause, Play } from "lucide-react"
+import { getVocabularyWords, getWordsByLevel, getBookById } from "@/services/vocabulary-service"
 import type { VocabularyWord } from "@/types/vocabulary"
 import { ThemeSwitcherButton } from "@/Integration_modules/theme-switcher-button"
 import { useTheme } from "@/contexts/theme-context"
@@ -35,7 +35,7 @@ export default function DictationPage() {
     return () => {
       stopTracking()
     }
-  }, [])
+  }, [startTracking, stopTracking])
 
   const { theme } = useTheme()
   const { toast } = useToast()
@@ -46,7 +46,6 @@ export default function DictationPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
   const [showAnswer, setShowAnswer] = useState(false)
-  const [linkToMastery, setLinkToMastery] = useState(true) // 添加此行，默认启用熟练度关联
   const [stats, setStats] = useState({
     startTime: Date.now(),
     inputCount: 0,
@@ -54,38 +53,58 @@ export default function DictationPage() {
     totalTime: 0,
   })
   const inputRef = useRef<HTMLInputElement>(null)
-  const [bookTitle, setBookTitle] = useState("我的词库")
+  const [title, setTitle] = useState("单词默写")
 
   // 获取单词数据
   useEffect(() => {
     const fetchWords = async () => {
       setIsLoading(true)
       try {
-        let data
+        let fetchedWords: VocabularyWord[] = []
+        let pageTitle = "单词默写"
+
+        // 获取词书信息
         if (bookId) {
-          // 如果指定了词书ID，按关卡获取单词
-          data = await getWordsByLevel(bookId, level)
-          setBookTitle(`第${level}关`)
-        } else {
-          // 随机排序单词
-          data = await getVocabularyWords()
-          const shuffled = [...data].sort(() => Math.random() - 0.5)
-          data = shuffled
+          const book = await getBookById(bookId)
+          if (book) {
+            pageTitle = `${book.book_name} - 第${level}关`
+          }
         }
-        setWords(data)
+
+        // 获取单词
+        if (bookId && level) {
+          // 如果提供了词书ID和关卡，则获取该关卡的单词
+          fetchedWords = await getWordsByLevel(bookId, level)
+          console.log(`已获取词书 ${bookId} 第 ${level} 关的单词:`, fetchedWords.length)
+        } else {
+          // 否则获取所有单词
+          fetchedWords = await getVocabularyWords()
+          console.log("已获取所有单词:", fetchedWords.length)
+        }
+
+        // 随机排序单词
+        const shuffled = [...fetchedWords].sort(() => Math.random() - 0.5)
+
+        setWords(shuffled)
+        setTitle(pageTitle)
         setStats({
           ...stats,
           startTime: Date.now(),
         })
       } catch (err) {
         console.error("获取单词失败:", err)
+        toast({
+          title: "获取单词失败",
+          description: "无法加载单词数据，请稍后再试",
+          variant: "destructive",
+        })
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchWords()
-  }, [bookId, level])
+  }, [bookId, level, toast])
 
   // 自动聚焦输入框
   useEffect(() => {
@@ -141,24 +160,6 @@ export default function DictationPage() {
       correctCount: isAnswerCorrect ? stats.correctCount + 1 : stats.correctCount,
     })
 
-    // 如果启用了熟练度关联，更新单词熟练度
-    if (linkToMastery && currentWord.id) {
-      try {
-        // 正确加一，错误减一
-        const newLevel = isAnswerCorrect ? 1 : -1
-        await updateMasteryLevel(currentWord.id, newLevel)
-
-        // 可选：显示提示
-        toast({
-          title: isAnswerCorrect ? "熟练度提升" : "熟练度下降",
-          description: `单词 "${currentWord.word}" 的熟练度已${isAnswerCorrect ? "提升" : "降低"}`,
-          variant: isAnswerCorrect ? "default" : "destructive",
-        })
-      } catch (error) {
-        console.error("更新熟练度失败:", error)
-      }
-    }
-
     // 延迟后移动到下一个单词
     setTimeout(() => {
       if (currentWordIndex < words.length - 1) {
@@ -171,6 +172,10 @@ export default function DictationPage() {
         setIsPaused(true)
         // 更新打卡记录
         updateStudyLog()
+        toast({
+          title: "默写完成",
+          description: `您已完成所有单词的默写，正确率: ${getAccuracy()}%`,
+        })
       }
     }, 1500)
   }
@@ -201,15 +206,6 @@ export default function DictationPage() {
   // 暂停/继续
   const togglePause = () => {
     setIsPaused(!isPaused)
-  }
-
-  // 切换熟练度关联
-  const toggleMasteryLink = () => {
-    setLinkToMastery(!linkToMastery)
-    toast({
-      title: !linkToMastery ? "已启用熟练度关联" : "已禁用熟练度关联",
-      description: !linkToMastery ? "拼写结果将影响单词熟练度" : "拼写结果不会影响单词熟练度",
-    })
   }
 
   // 获取容器类名
@@ -246,23 +242,14 @@ export default function DictationPage() {
               variant="ghost"
               size="sm"
               className="flex items-center gap-1 h-8 hover:scale-105 transition-transform text-gray-600"
-              onClick={() => router.back()}
+              onClick={() => (bookId ? router.push(`/book/${bookId}`) : router.back())}
             >
               <ArrowLeft className="h-3 w-3" />
               返回
             </Button>
-            <h1 className="text-lg font-bold ml-2 text-gray-800">{bookTitle}</h1>
+            <h1 className="text-lg font-bold ml-2 text-gray-800">{title}</h1>
           </div>
           <div className="flex gap-2 items-center">
-            <Button
-              variant={linkToMastery ? "default" : "outline"}
-              size="sm"
-              onClick={toggleMasteryLink}
-              className="flex items-center gap-1 h-8 text-xs"
-            >
-              <Settings className="h-3 w-3" />
-              {linkToMastery ? "已关联熟练度" : "未关联熟练度"}
-            </Button>
             <Button variant="outline" size="sm" onClick={togglePause} className="flex items-center gap-1 h-8 text-xs">
               {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
               {isPaused ? "继续" : "暂停"}
@@ -282,6 +269,13 @@ export default function DictationPage() {
               <CardContent className="flex items-center justify-center p-12">
                 <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
                 <span className="ml-3 text-gray-600">加载单词中...</span>
+              </CardContent>
+            </Card>
+          ) : words.length === 0 ? (
+            <Card className="bg-white/80 backdrop-blur-sm shadow-sm">
+              <CardContent className="flex flex-col items-center justify-center p-12">
+                <div className="text-gray-600 mb-4">当前关卡没有可用的单词</div>
+                <Button onClick={() => router.back()}>返回</Button>
               </CardContent>
             </Card>
           ) : (

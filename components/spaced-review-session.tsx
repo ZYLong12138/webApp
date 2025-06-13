@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { CheckCircle2, X } from "lucide-react"
 import type { ReviewResult } from "@/types/review"
+import { useRouter } from "next/navigation"
 
 // 定义内存中的复习项类型
 interface ReviewItem {
@@ -38,10 +39,21 @@ interface ReviewItem {
 interface SpacedReviewSessionProps {
   words: any[]
   onComplete: () => void
+  isLoading?: boolean
+  error?: string | null
 }
 
-export function SpacedReviewSession({ words, onComplete }: SpacedReviewSessionProps) {
+// 用于存储已复习单词的sessionStorage键名
+const REVIEWED_WORDS_KEY = "recently_reviewed_words"
+
+export function SpacedReviewSession({
+  words = [], // 提供默认值，防止undefined
+  onComplete,
+  isLoading = false,
+  error = null,
+}: SpacedReviewSessionProps) {
   const { toast } = useToast()
+  const router = useRouter()
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
@@ -63,7 +75,7 @@ export function SpacedReviewSession({ words, onComplete }: SpacedReviewSessionPr
 
   // 初始化复习队列
   useEffect(() => {
-    if (words.length > 0) {
+    if (words && words.length > 0) {
       // 将API返回的单词转换为内部ReviewItem格式
       const initialQueue = words.map((word) => ({
         ...word,
@@ -89,11 +101,14 @@ export function SpacedReviewSession({ words, onComplete }: SpacedReviewSessionPr
 
   // 检查是否所有原始单词都已复习
   const isAllOriginalWordsReviewed = () => {
-    return words.every((word) => reviewedOriginalWords.has(word.id))
+    return words && words.length > 0 && words.every((word) => reviewedOriginalWords.has(word.id))
   }
 
   // 检查复习会话是否完成
   const checkSessionComplete = () => {
+    // 如果没有单词需要复习，直接返回
+    if (!words || words.length === 0) return
+
     // 会话完成条件：队列为空 且 所有原始单词都已复习
     const queueIsEmpty = reviewQueue.length === 0
     const allOriginalWordsReviewed = isAllOriginalWordsReviewed()
@@ -341,19 +356,21 @@ export function SpacedReviewSession({ words, onComplete }: SpacedReviewSessionPr
   // 手动结束会话
   const handleEndSession = () => {
     // 将所有未复习的原始单词标记为已复习
-    const remainingOriginalIds = words.map((word) => word.id).filter((id) => !reviewedOriginalWords.has(id))
+    if (words && words.length > 0) {
+      const remainingOriginalIds = words.map((word) => word.id).filter((id) => !reviewedOriginalWords.has(id))
 
-    if (remainingOriginalIds.length > 0) {
-      setReviewedOriginalWords((prev) => {
-        const newSet = new Set(prev)
-        remainingOriginalIds.forEach((id) => newSet.add(id))
-        return newSet
-      })
+      if (remainingOriginalIds.length > 0) {
+        setReviewedOriginalWords((prev) => {
+          const newSet = new Set(prev)
+          remainingOriginalIds.forEach((id) => newSet.add(id))
+          return newSet
+        })
 
-      toast({
-        title: "会话已手动结束",
-        description: `跳过了${remainingOriginalIds.length}个未复习的单词`,
-      })
+        toast({
+          title: "会话已手动结束",
+          description: `跳过了${remainingOriginalIds.length}个未复习的单词`,
+        })
+      }
     }
 
     // 清空队列，触发会话完成
@@ -363,15 +380,69 @@ export function SpacedReviewSession({ words, onComplete }: SpacedReviewSessionPr
     setShowEndSessionDialog(false)
   }
 
+  // 保存已复习的单词到sessionStorage
+  const saveReviewedWords = () => {
+    try {
+      // 提取已复习单词的必要信息
+      const reviewedWords = words
+        .filter((word) => reviewedOriginalWords.has(word.id))
+        .map((word) => ({
+          id: word.id,
+          word: word.word,
+          definition: word.definition,
+          pronunciation: word.pronunciation,
+          example: word.example,
+          bookIds: word.bookIds || [],
+        }))
+
+      // 保存到sessionStorage
+      sessionStorage.setItem(REVIEWED_WORDS_KEY, JSON.stringify(reviewedWords))
+      console.log(`已保存${reviewedWords.length}个已复习单词到sessionStorage`)
+
+      // 添加一个标记，表示这些单词来自复习会话
+      sessionStorage.setItem("words_from_review", "true")
+    } catch (error) {
+      console.error("保存已复习单词失败:", error)
+    }
+  }
+
   // 完成复习的处理函数
   const handleFinish = () => {
     setShowSummary(false)
+
+    // 保存已复习的单词
+    saveReviewedWords()
+
+    // 导航到词卡页面，展示刚刚复习的单词
+    router.push("/review_card?from=review")
+
     // 确保调用onComplete回调
     onComplete()
   }
 
+  // 显示加载状态
+  if (isLoading) {
+    return (
+      <div className="max-w-md mx-auto text-center py-12">
+        <h2 className="text-2xl font-bold mb-4">加载中...</h2>
+        <p className="text-gray-600 mb-6">正在准备复习队列</p>
+      </div>
+    )
+  }
+
+  // 显示错误信息
+  if (error) {
+    return (
+      <div className="max-w-md mx-auto text-center py-12">
+        <h2 className="text-2xl font-bold mb-4 text-red-600">出错了</h2>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <Button onClick={onComplete}>返回</Button>
+      </div>
+    )
+  }
+
   // 如果没有单词需要复习
-  if (words.length === 0) {
+  if (!words || words.length === 0) {
     return (
       <div className="max-w-md mx-auto text-center py-12">
         <h2 className="text-2xl font-bold mb-4">没有需要复习的单词</h2>

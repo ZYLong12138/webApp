@@ -5,7 +5,9 @@ import "./globals.css"
 import "../design/themes.css" // 添加主题CSS
 import { ThemeProvider } from "@/contexts/theme-context" // 导入主题提供者
 import { AudioProvider } from "@/contexts/audio-context" // 导入音频提供者
+import { MusicProvider } from "@/contexts/music-context" // 导入音乐提供者
 import { PomodoroTimer } from "@/components/pomodoro/pomodoro-timer" // 导入番茄时钟组件
+import { MusicPlayer } from "@/components/music-player/music-player" // 导入音乐播放器组件
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,8 +26,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <AudioProvider>
-            {children}
-            <PomodoroTimer />
+            <MusicProvider>
+              {children}
+              <PomodoroTimer />
+              <MusicPlayer />
+            </MusicProvider>
           </AudioProvider>
         </ThemeProvider>
       </body>
