@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress"
 import { Volume2, Check, X, Star, ArrowLeft } from "lucide-react"
 import { LearningManager, TestType } from "../algorithm/learning"
 import { updateMasteryLevel, getMasteryLevel, completeLevel } from "../services/vocabulary-service"
+import { addToReviewQueue } from "../services/review-service" // 添加这一行
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import type { VocabularyWord } from "@/types/vocabulary"
@@ -108,6 +109,19 @@ export function WordLearningCard({ words = [], onComplete, bookId, level = 1, al
         setCurrentWordStatus(wordState.testsPassed)
       }
     }
+
+    // 当学习完成时，确保所有学习过的单词都被添加到复习队列
+    if (learningManager && learningManager.isCompleted()) {
+      const wordStates = learningManager.getWordStates()
+      const completedWordIds = Array.from(wordStates.entries())
+        .filter(([_, state]) => state.completed)
+        .map(([id]) => id)
+
+      if (completedWordIds.length > 0) {
+        // 批量添加到复习队列
+        addToReviewQueue(completedWordIds[0]).catch((error) => console.error("添加到复习队列失败:", error))
+      }
+    }
   }, [learningManager, currentTest])
 
   // 更新熟练度的函数
@@ -142,7 +156,7 @@ export function WordLearningCard({ words = [], onComplete, bookId, level = 1, al
   }
 
   // 处理选项点击
-  const handleOptionClick = (isCorrect: boolean, index: number) => {
+  const handleOptionClick = async (isCorrect: boolean, index: number) => {
     if (selectedOption !== null || !learningManager || !currentTest) return
 
     setSelectedOption(index)
@@ -157,6 +171,13 @@ export function WordLearningCard({ words = [], onComplete, bookId, level = 1, al
         ...prevStatus,
         [currentTest.testType]: true,
       }))
+
+      // 如果回答正确，将单词添加到复习队列
+      try {
+        await addToReviewQueue(currentTest.wordId)
+      } catch (error) {
+        console.error("添加到复习队列失败:", error)
+      }
     }
   }
 
@@ -210,9 +231,12 @@ export function WordLearningCard({ words = [], onComplete, bookId, level = 1, al
           [currentTest.wordId]: 5,
         }))
 
+        // 将单词添加到复习队列
+        await addToReviewQueue(currentTest.wordId, 3) // 初始间隔为3天，因为已经掌握得很好
+
         toast({
           title: "已标记为掌握",
-          description: "单词熟练度已设置为最高级别",
+          description: "单词熟练度已设置为最高级别，并已添加到复习队列",
         })
       } catch (error) {
         console.error("更新掌握程度失败:", error)
@@ -234,9 +258,12 @@ export function WordLearningCard({ words = [], onComplete, bookId, level = 1, al
           [currentTest.wordId]: -3,
         }))
 
+        // 将单词添加到复习队列，设置较短的初始间隔
+        await addToReviewQueue(currentTest.wordId, 1) // 初始间隔为1天，因为需要更频繁地复习
+
         toast({
           title: "已标记为需要复习",
-          description: "单词已添加到重点复习列表",
+          description: "单词已添加到重点复习列表和复习队列",
         })
       } catch (error) {
         console.error("更新掌握程度失败:", error)

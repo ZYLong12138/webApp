@@ -116,9 +116,9 @@ export default function BookPage({ params }: { params: { id: string } }) {
       <div className="min-h-screen bg-gray-50">
         {/* 顶部导航和操作按钮 */}
         <div className="container mx-auto pt-4 px-4 flex justify-between items-center">
-          <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/book_select")}>
+          <Button variant="ghost" className="flex items-center gap-2" onClick={() => router.push("/")}>
             <ArrowLeft className="h-4 w-4" />
-            返回词书选择
+            返回首页
           </Button>
 
           {!isLoading && !error && book && (
@@ -153,8 +153,8 @@ export default function BookPage({ params }: { params: { id: string } }) {
           ) : error ? (
             <div className="bg-red-50 text-red-600 p-6 rounded-md">
               <p>{error}</p>
-              <Button variant="outline" className="mt-4" onClick={() => router.push("/book_select")}>
-                返回词书列表
+              <Button variant="outline" className="mt-4" onClick={() => router.push("/")}>
+                返回首页
               </Button>
             </div>
           ) : book ? (
@@ -189,8 +189,8 @@ export default function BookPage({ params }: { params: { id: string } }) {
           ) : (
             <div className="text-center py-16">
               <p className="text-gray-600">找不到词书信息</p>
-              <Button variant="outline" className="mt-4" onClick={() => router.push("/book_select")}>
-                返回词书列表
+              <Button variant="outline" className="mt-4" onClick={() => router.push("/")}>
+                返回首页
               </Button>
             </div>
           )}

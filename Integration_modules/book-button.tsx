@@ -3,7 +3,7 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import type { LucideIcon } from "lucide-react"
-import { Book } from "lucide-react"
+import { Book } from 'lucide-react'
 
 // 定义 BookButton 组件的 props 接口
 interface BookButtonProps {
@@ -16,6 +16,8 @@ interface BookButtonProps {
   tagText?: string // 标签中显示的文本
   href?: string // 可选的自定义 URL（默认为 /book/[id]）
   onClick?: () => void // 可选的自定义点击处理函数
+  asTitle?: boolean // 是否作为标题显示（新增）
+  className?: string // 自定义类名（新增）
 }
 
 export function BookButton({
@@ -28,6 +30,8 @@ export function BookButton({
   tagText = "词书",
   href,
   onClick,
+  asTitle = false, // 默认不作为标题
+  className = "",
 }: BookButtonProps) {
   const router = useRouter()
 
@@ -42,9 +46,22 @@ export function BookButton({
     }
   }
 
+  // 如果作为标题显示，使用h3标签样式但保持可点击
+  if (asTitle) {
+    return (
+      <h3 
+        className={`text-lg font-bold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors ${className}`}
+        onClick={handleClick}
+      >
+        {title}
+      </h3>
+    )
+  }
+
+  // 否则使用原来的卡片样式
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+      className={`bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors shadow-sm ${className}`}
       onClick={handleClick}
     >
       <div className="flex items-start gap-3">
@@ -68,4 +85,3 @@ export function BookButton({
 export function BookButtonGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
 }
-

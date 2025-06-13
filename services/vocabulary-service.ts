@@ -1,492 +1,1074 @@
-"use client"
+import { supabase } from "@/lib/supabase"
+import type { VocabularyWord, NewVocabularyWord } from "@/types/vocabulary"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { RecallCard } from "./recall-card"
-import { submitReviewResult } from "@/services/review-service"
-import { useToast } from "@/hooks/use-toast"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { CheckCircle2, X } from "lucide-react"
-import type { ReviewResult } from "@/types/review"
+// 检查词汇表是否存在
+export async function checkVocabularyTables(): Promise<{
+  wordListExists: boolean
+  bookListExists: boolean
+  mappingExists: boolean
+}> {
+  try {
+    // 检查word_list表
+    const { data: wordData, error: wordError } = await supabase.from("word_list").select("id").limit(1)
 
-// 定义内存中的复习项类型
-interface ReviewItem {
-  id: string | number
-  word: string
-  definition: string
-  example?: string
-  pronunciation?: string
-  current_interval: number
-  ease_factor: number
-  review_count: number
-  next_review_date: string
-  // 添加本地状态跟踪
-  reviewed: boolean
-  result?: ReviewResult
-  originalId: number // 保存原始ID用于批量更新
-  repeatCount?: number // 跟踪单词在当前会话中被重复的次数
+    // 检查book_list表
+    const { data: bookData, error: bookError } = await supabase.from("book_list").select("id").limit(1)
+
+    // 检查book_word_mapping表（使用小写表名）
+    const { data: mappingData, error: mappingError } = await supabase
+      .from("book_word_mapping")
+      .select("book_id, word_id")
+      .limit(1)
+
+    return {
+      wordListExists: !wordError,
+      bookListExists: !bookError,
+      mappingExists: !mappingError,
+    }
+  } catch (error) {
+    console.error("Error checking vocabulary tables:", error)
+    return {
+      wordListExists: false,
+      bookListExists: false,
+      mappingExists: false,
+    }
+  }
 }
 
-interface SpacedReviewSessionProps {
-  words: any[]
-  onComplete: () => void
+// 获取所有词书
+export async function getAllBooks() {
+  try {
+    const { data, error } = await supabase.from("book_list").select("*").order("book_name", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching books:", error)
+      throw error
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getAllBooks:", error)
+    return []
+  }
 }
 
-export function SpacedReviewSession({ words, onComplete }: SpacedReviewSessionProps) {
-  const { toast } = useToast()
-  const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showSummary, setShowSummary] = useState(false)
-  const [summaryStats, setSummaryStats] = useState({
-    total: 0,
-    again: 0,
-    hard: 0,
-    good: 0,
-    easy: 0,
-  })
-  const [completedReviews, setCompletedReviews] = useState<ReviewItem[]>([])
-  const [isSessionComplete, setIsSessionComplete] = useState(false)
-  // 新增：跟踪已复习的原始单词ID
-  const [reviewedOriginalWords, setReviewedOriginalWords] = useState<Set<number>>(new Set())
-  // 新增：最大重复次数限制
-  const MAX_REPEAT_COUNT = 5
-  // 新增：是否显示手动结束会话对话框
-  const [showEndSessionDialog, setShowEndSessionDialog] = useState(false)
+// 获取特定词书的信息
+export async function getBookById(bookId: string) {
+  try {
+    const { data, error } = await supabase.from("book_list").select("*").eq("id", bookId).single()
 
-  // 初始化复习队列
-  useEffect(() => {
-    if (words.length > 0) {
-      // 将API返回的单词转换为内部ReviewItem格式
-      const initialQueue = words.map((word) => ({
-        ...word,
-        reviewed: false,
-        originalId: word.id,
-        repeatCount: 0, // 初始化重复次数为0
-      }))
-
-      // 按照next_review_date排序
-      const sortedQueue = sortReviewQueue(initialQueue)
-      setReviewQueue(sortedQueue)
-    }
-  }, [words])
-
-  // 排序复习队列的辅助函数
-  const sortReviewQueue = (queue: ReviewItem[]): ReviewItem[] => {
-    return [...queue].sort((a, b) => {
-      const dateA = new Date(a.next_review_date).getTime()
-      const dateB = new Date(b.next_review_date).getTime()
-      return dateA - dateB
-    })
-  }
-
-  // 检查是否所有原始单词都已复习
-  const isAllOriginalWordsReviewed = () => {
-    return words.every((word) => reviewedOriginalWords.has(word.id))
-  }
-
-  // 检查复习会话是否完成
-  const checkSessionComplete = () => {
-    // 会话完成条件：队列为空 且 所有原始单词都已复习
-    const queueIsEmpty = reviewQueue.length === 0
-    const allOriginalWordsReviewed = isAllOriginalWordsReviewed()
-
-    console.log(
-      `检查会话完成状态: 所有原始单词已复习=${allOriginalWordsReviewed}, 队列为空=${queueIsEmpty}, 队列长度=${reviewQueue.length}`,
-    )
-
-    if (allOriginalWordsReviewed && queueIsEmpty && !isSessionComplete) {
-      console.log("会话完成条件满足，准备显示总结")
-
-      // 计算统计数据
-      const stats = {
-        total: completedReviews.length,
-        again: completedReviews.filter((item) => item.result === "again").length,
-        hard: completedReviews.filter((item) => item.result === "hard").length,
-        good: completedReviews.filter((item) => item.result === "good").length,
-        easy: completedReviews.filter((item) => item.result === "easy").length,
-      }
-
-      setSummaryStats(stats)
-      setShowSummary(true)
-      setIsSessionComplete(true)
-
-      // 批量更新数据库
-      batchUpdateReviews()
-    }
-  }
-
-  // 监听队列和已复习单词的变化，检查会话是否完成
-  useEffect(() => {
-    checkSessionComplete()
-  }, [reviewQueue, reviewedOriginalWords])
-
-  // 批量更新复习结果到数据库
-  const batchUpdateReviews = async () => {
-    try {
-      // 显示正在同步的提示
-      toast({
-        title: "正在同步复习结果",
-        description: "请稍候，正在将您的复习结果保存到数据库...",
-      })
-
-      // 准备批量更新数据
-      const updatePromises = completedReviews.map(async (review) => {
-        if (review.result) {
-          try {
-            console.log(`正在更新复习结果: ID=${review.originalId}, 结果=${review.result}`)
-            const success = await submitReviewResult(review.originalId, review.result)
-            if (!success) {
-              console.warn(`更新复习结果失败 (ID: ${review.originalId}): 未找到对应的复习项或创建失败`)
-            }
-            return success
-          } catch (error) {
-            console.error(`更新复习结果失败 (ID: ${review.originalId}):`, error)
-            return false
-          }
-        }
-        return false
-      })
-
-      // 等待所有更新完成
-      const results = await Promise.all(updatePromises)
-      const successCount = results.filter(Boolean).length
-
-      console.log(`所有复习结果已同步到数据库: ${successCount}/${completedReviews.length} 成功`)
-
-      if (successCount === completedReviews.length) {
-        toast({
-          title: "同步成功",
-          description: `所有 ${successCount} 个复习结果已成功同步`,
-          variant: "default",
-        })
-      } else if (successCount > 0) {
-        toast({
-          title: "部分同步成功",
-          description: `${successCount}/${completedReviews.length} 个复习结果已成功同步`,
-          variant: "warning",
-        })
-      } else {
-        toast({
-          title: "同步失败",
-          description: "无法将复习结果同步到数据库",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("批量更新复习结果失败:", error)
-      toast({
-        title: "同步失败",
-        description: "无法将复习结果同步到数据库，请稍后再试",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // 生成随机偏移量，偏向于较大的数字
-  const generateOffset = (): number => {
-    // 可能的偏移量
-    const offsets = [3, 4, 5, 6, 7, 8, 9]
-
-    // 权重，使7,8,9的概率更高
-    const weights = [0.05, 0.05, 0.1, 0.1, 0.2, 0.25, 0.25]
-
-    // 生成0-1之间的随机数
-    const random = Math.random()
-
-    // 根据权重选择偏移量
-    let sum = 0
-    for (let i = 0; i < weights.length; i++) {
-      sum += weights[i]
-      if (random < sum) {
-        return offsets[i]
-      }
+    if (error) {
+      console.error("Error fetching book:", error)
+      throw error
     }
 
-    // 默认返回最大偏移量
-    return 9
-  }
-
-  // 找到新卡片应该插入的位置
-  const findInsertPosition = (queue: ReviewItem[]): number => {
-    // 计算插入位置
-    const offset = generateOffset()
-
-    // 注意：此时队列中仍包含当前卡片（在索引0的位置）
-    // 我们需要确保新卡片至少插入到索引1的位置
-    const insertPosition = Math.max(1, offset)
-
-    // 如果插入位置超出队列长度，则插入到队列末尾
-    if (insertPosition >= queue.length) {
-      return queue.length
-    }
-
-    return insertPosition
-  }
-
-  // 处理复习结果 - 使用队列头部控制
-  const handleResult = (result: ReviewResult) => {
-    // 确保队列不为空
-    if (reviewQueue.length === 0) return
-
-    // 获取当前卡片（队列头部）
-    const currentCard = reviewQueue[0]
-
-    console.log(`处理结果: ${result} 当前单词: ${currentCard.word}, 队列长度: ${reviewQueue.length}`)
-
-    // 标记为已复习
-    setReviewedOriginalWords((prev) => {
-      const newSet = new Set(prev)
-      newSet.add(currentCard.originalId)
-      return newSet
-    })
-
-    // 添加到已完成列表
-    setCompletedReviews((prev) => [...prev, { ...currentCard, reviewed: true, result }])
-
-    // 更新队列 - 关键是处理顺序
-    setReviewQueue((prev) => {
-      // 创建新队列的副本，但暂时不移除第一个元素
-      const newQueue = [...prev]
-
-      // 如果是"不记得"，且未达到最大重复次数，则先插入新卡片
-      let insertedNewCard = false
-      if (result === "again") {
-        const repeatCount = (currentCard.repeatCount || 0) + 1
-
-        if (repeatCount < MAX_REPEAT_COUNT) {
-          // 创建新的复习项
-          const newReviewItem = {
-            ...currentCard,
-            reviewed: false,
-            result: undefined,
-            repeatCount: repeatCount,
-          }
-
-          // 找到合适的插入位置（注意：此时队列中仍包含当前卡片）
-          const insertIndex = findInsertPosition(newQueue)
-          newQueue.splice(insertIndex, 0, newReviewItem)
-          insertedNewCard = true
-
-          console.log(`插入新卡片到位置 ${insertIndex}, 队列长度更新为: ${newQueue.length}`)
-        } else {
-          console.log(`单词 ${currentCard.word} 已达到最大重复次数 ${MAX_REPEAT_COUNT}`)
-          toast({
-            title: "已达到最大重复次数",
-            description: `这个单词已经复习了${MAX_REPEAT_COUNT}次，将不再重复`,
-            variant: "warning",
-          })
-        }
-      }
-
-      // 现在安全地移除第一个元素（当前卡片）
-      newQueue.shift()
-
-      // 如果是最后一个单词且选择了"again"，记录日志
-      if (prev.length === 1 && insertedNewCard) {
-        console.log(`处理最后一个单词的'again'结果：新队列长度 = ${newQueue.length}`)
-      }
-
-      return newQueue
-    })
-  }
-
-  // 手动结束会话
-  const handleEndSession = () => {
-    // 将所有未复习的原始单词标记为已复习
-    const remainingOriginalIds = words.map((word) => word.id).filter((id) => !reviewedOriginalWords.has(id))
-
-    if (remainingOriginalIds.length > 0) {
-      setReviewedOriginalWords((prev) => {
-        const newSet = new Set(prev)
-        remainingOriginalIds.forEach((id) => newSet.add(id))
-        return newSet
-      })
-
-      toast({
-        title: "会话已手动结束",
-        description: `跳过了${remainingOriginalIds.length}个未复习的单词`,
-      })
-    }
-
-    // 清空队列，触发会话完成
-    setReviewQueue([])
-
-    // 关闭对话框
-    setShowEndSessionDialog(false)
-  }
-
-  // 完成复习的处理函数
-  const handleFinish = () => {
-    setShowSummary(false)
-    // 确保调用onComplete回调
-    onComplete()
-  }
-
-  // 如果没有单词需要复习
-  if (words.length === 0) {
-    return (
-      <div className="max-w-md mx-auto text-center py-12">
-        <h2 className="text-2xl font-bold mb-4">没有需要复习的单词</h2>
-        <p className="text-gray-600 mb-6">今天没有需要复习的单词，请明天再来</p>
-        <Button onClick={onComplete}>返回</Button>
-      </div>
-    )
-  }
-
-  // 如果队列为空或全部完成
-  if (reviewQueue.length === 0) {
-    if (!isSessionComplete) {
-      return (
-        <div className="max-w-md mx-auto text-center py-12">
-          <h2 className="text-2xl font-bold mb-4">加载中...</h2>
-          <p className="text-gray-600 mb-6">正在准备复习队列</p>
-        </div>
-      )
-    }
-    // 如果会话已完成但队列为空，显示空状态
+    return data
+  } catch (error) {
+    console.error("Error in getBookById:", error)
     return null
   }
+}
 
-  // 当前卡片 - 始终是队列的第一个元素
-  const currentWord = reviewQueue[0]
+// 获取所有词汇或特定词书的词汇，支持分页
+export async function getVocabularyWords(bookId?: string, page = 1, limit = 200): Promise<VocabularyWord[]> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
 
-  // 计算进度
-  const totalOriginalCards = words.length
-  const completedOriginalCards = reviewedOriginalWords.size
-  const progress = (completedOriginalCards / totalOriginalCards) * 100
+    // 计算分页的起始位置
+    const from = (page - 1) * limit
+    const to = from + limit - 1
 
-  return (
-    <>
-      <div className="max-w-2xl mx-auto">
-        {/* 进度条 */}
-        <div className="mb-6">
-          <div className="flex justify-between text-sm text-gray-600 mb-1">
-            <span>复习进度</span>
-            <span>
-              {completedOriginalCards} / {totalOriginalCards}
-            </span>
-          </div>
-          <Progress value={progress} className="h-2" />
-        </div>
-        {/* 队列状态信息 */}
-        <div className="mb-4 p-2 bg-gray-50 rounded-md border border-gray-200">
-          <div className="flex justify-between text-xs text-gray-500">
-            <div>
-              <span className="font-medium">当前单词:</span> {currentWord.word}
-            </div>
-            <div>
-              <span className="font-medium">队列长度:</span> {reviewQueue.length}
-            </div>
-          </div>
-          <div className="mt-1 text-xs text-gray-500">
-            <span className="font-medium">已复习原始单词:</span> {completedOriginalCards} / {totalOriginalCards}
-          </div>
-        </div>
+    // 如果没有指定词书ID，直接获取所有单词
+    if (!bookId || bookId === "my-vocabulary") {
+      const { data: words, error: wordsError } = await supabase
+        .from("word_list")
+        .select("*")
+        .order("id", { ascending: true })
+        .range(from, to)
 
-        {/* 详细队列状态 */}
-        <details className="text-xs mt-1">
-          <summary className="cursor-pointer text-blue-600 hover:text-blue-800">显示队列详情</summary>
-          <div className="mt-2 p-2 bg-gray-100 rounded-md overflow-auto max-h-32">
-            {reviewQueue.map((item, idx) => (
-              <div
-                key={`${item.id}-${idx}`}
-                className={`mb-1 ${idx === 0 ? "bg-yellow-100 font-medium" : ""} ${item.reviewed ? "text-gray-400" : "text-gray-700"}`}
-              >
-                {idx}: {item.word}
-                {item.repeatCount ? ` (重复: ${item.repeatCount})` : ""}
-                {item.reviewed ? " ✓" : ""}
-                {idx === 0 ? " 👈 当前" : ""}
-              </div>
-            ))}
-          </div>
-        </details>
+      if (wordsError) {
+        console.error("Error fetching vocabulary words:", wordsError)
+        throw wordsError
+      }
 
-        {/* 手动结束会话按钮 */}
-        <div className="flex justify-end mb-4">
-          <Button variant="outline" size="sm" onClick={() => setShowEndSessionDialog(true)} className="text-gray-500">
-            结束会话
-          </Button>
-        </div>
+      // 处理掌握程度数据
+      return processWordMasteryData(words || [], userId)
+    }
 
-        {/* 回忆卡片 */}
-        <RecallCard
-          word={currentWord}
-          onResult={handleResult}
-          repeatCount={currentWord.repeatCount || 0}
-          maxRepeatCount={MAX_REPEAT_COUNT}
-        />
-      </div>
+    // 如果指定了词书ID，尝试通过映射表过滤单词
+    try {
+      // 尝试获取词书中的单词ID列表
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping") // 使用小写表名
+        .select("word_id")
+        .eq("book_id", bookId)
 
-      {/* 复习总结对话框 */}
-      <Dialog open={showSummary} onOpenChange={setShowSummary}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>复习完成</DialogTitle>
-            <DialogDescription>您已完成今天的所有复习任务</DialogDescription>
-          </DialogHeader>
+      // 如果映射表不存在或查询出错，直接返回空数组
+      if (mappingError) {
+        console.error("Error fetching word mappings:", mappingError)
+        return []
+      }
 
-          <div className="py-4">
-            <div className="text-center mb-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600 mb-2">
-                <CheckCircle2 className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-bold">复习完成！</h3>
-              <p className="text-gray-600">您今天复习了 {summaryStats.total} 个单词</p>
-            </div>
+      // 如果词书中有单词，过滤word_list表
+      if (mappingData && mappingData.length > 0) {
+        const wordIds = mappingData.map((item) => item.word_id)
 
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              <div className="bg-red-50 p-3 rounded-md">
-                <div className="text-sm text-red-600">不记得</div>
-                <div className="text-xl font-bold">{summaryStats.again}</div>
-              </div>
-              <div className="bg-orange-50 p-3 rounded-md">
-                <div className="text-sm text-orange-600">困难</div>
-                <div className="text-xl font-bold">{summaryStats.hard}</div>
-              </div>
-              <div className="bg-yellow-50 p-3 rounded-md">
-                <div className="text-sm text-yellow-600">一般</div>
-                <div className="text-xl font-bold">{summaryStats.good}</div>
-              </div>
-              <div className="bg-green-50 p-3 rounded-md">
-                <div className="text-sm text-green-600">简单</div>
-                <div className="text-xl font-bold">{summaryStats.easy}</div>
-              </div>
-            </div>
-          </div>
+        // 使用分页参数获取单词
+        const { data: words, error: wordsError } = await supabase
+          .from("word_list")
+          .select("*")
+          .in("id", wordIds)
+          .order("id", { ascending: true })
+          .range(from, to)
 
-          <DialogFooter>
-            <Button onClick={handleFinish}>完成</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        if (wordsError) {
+          console.error("Error fetching vocabulary words:", wordsError)
+          throw wordsError
+        }
 
-      {/* 手动结束会话确认对话框 */}
-      <Dialog open={showEndSessionDialog} onOpenChange={setShowEndSessionDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>确认结束会话</DialogTitle>
-            <DialogDescription>您确定要结束当前复习会话吗？未复习的单词将被标记为已复习。</DialogDescription>
-          </DialogHeader>
+        // 处理掌握程度数据
+        return processWordMasteryData(words || [], userId)
+      } else {
+        // 词书中没有单词，返回空数组
+        return []
+      }
+    } catch (error) {
+      // 如果出现错误（例如表不存在），返回空数组
+      console.error("Error in book word mapping:", error)
+      return []
+    }
+  } catch (error) {
+    console.error("Error in getVocabularyWords:", error)
+    return []
+  }
+}
 
-          <DialogFooter className="flex justify-between">
-            <Button variant="outline" onClick={() => setShowEndSessionDialog(false)}>
-              取消
-            </Button>
-            <Button variant="destructive" onClick={handleEndSession}>
-              <X className="h-4 w-4 mr-2" />
-              结束会话
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
+// 添加一个辅助函数来处理单词掌握程度数据
+async function processWordMasteryData(words: any[], userId: string | undefined): Promise<VocabularyWord[]> {
+  // 如果用户未登录，只返回单词数据，掌握程度默认为0
+  if (!userId) {
+    return words.map((word) => ({
+      ...word,
+      mastery_level: 0,
+      last_reviewed: null,
+    }))
+  }
+
+  // 如果用户已登录，获取掌握程度数据
+  try {
+    const { data: masteryData, error: masteryError } = await supabase
+      .from("word_mastery")
+      .select("*")
+      .eq("user_id", userId)
+
+    if (masteryError) {
+      console.error("Error fetching mastery data:", masteryError)
+      // 如果获取掌握程度失败，仍然返回单词数据，但掌握程度默认为0
+      return words.map((word) => ({
+        ...word,
+        mastery_level: 0,
+        last_reviewed: null,
+      }))
+    }
+
+    // 创建掌握程度查找表
+    const masteryMap = new Map()
+    masteryData?.forEach((mastery) => {
+      masteryMap.set(mastery.word_id, {
+        mastery_level: mastery.mastery_level,
+        last_reviewed: mastery.last_reviewed,
+      })
+    })
+
+    // 合并单词数据和掌握程度
+    return words.map((word) => {
+      const mastery = masteryMap.get(word.id)
+      return {
+        ...word,
+        mastery_level: mastery ? mastery.mastery_level : 0,
+        last_reviewed: mastery ? mastery.last_reviewed : null,
+        has_mastery_data: !!mastery, // Add this flag to indicate if the word has mastery data
+      }
+    })
+  } catch (error) {
+    console.error("Error processing mastery data:", error)
+    return words.map((word) => ({
+      ...word,
+      mastery_level: 0,
+      last_reviewed: null,
+    }))
+  }
+}
+
+// 修改 getBookWordCount 函数，使用小写表名并添加错误处理
+export async function getBookWordCount(bookId: string): Promise<number> {
+  try {
+    // 如果是"我的单词本"，返回所有单词数量
+    if (bookId === "my-vocabulary") {
+      const { count, error } = await supabase.from("word_list").select("*", { count: "exact", head: true })
+
+      if (error) {
+        console.error("Error counting words:", error)
+        return 0
+      }
+
+      return count || 0
+    }
+
+    // 否则尝试获取特定词书的单词数量
+    try {
+      const { count, error } = await supabase
+        .from("book_word_mapping") // 使用小写表名
+        .select("*", { count: "exact", head: true })
+        .eq("book_id", bookId)
+
+      if (error) {
+        console.error("Error counting book words:", error)
+        return 0
+      }
+
+      return count || 0
+    } catch (error) {
+      // 如果表不存在或其他错误，返回0
+      console.error("Error in getBookWordCount:", error)
+      return 0
+    }
+  } catch (error) {
+    console.error("Error in getBookWordCount:", error)
+    return 0
+  }
+}
+
+// 添加新词汇
+export async function addVocabularyWord(newWord: NewVocabularyWord, bookId?: string): Promise<VocabularyWord | null> {
+  try {
+    // 添加单词到word_list表
+    const { data, error } = await supabase.from("word_list").insert([newWord]).select().single()
+
+    if (error) {
+      console.error("Error adding vocabulary word:", error)
+      throw error
+    }
+
+    // 如果指定了词书ID，添加映射关系
+    if (bookId && data) {
+      const { error: mappingError } = await supabase.from("Book_word_mapping").insert([
+        {
+          book_id: bookId,
+          word_id: data.id,
+        },
+      ])
+
+      if (mappingError) {
+        console.error("Error adding word to book:", mappingError)
+        // 不抛出错误，因为单词已经添加成功
+      }
+    }
+
+    return {
+      ...data,
+      mastery_level: 0,
+      last_reviewed: null,
+    }
+  } catch (error) {
+    console.error("Error in addVocabularyWord:", error)
+    return null
+  }
+}
+
+// 修改 deleteVocabularyWord 函数，使用小写表名
+export async function deleteVocabularyWord(id: string | number): Promise<boolean> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    // 首先删除掌握程度记录（如果存在）
+    if (userId) {
+      const { error: masteryError } = await supabase
+        .from("word_mastery")
+        .delete()
+        .eq("word_id", id)
+        .eq("user_id", userId)
+
+      if (masteryError) {
+        console.error("Error deleting mastery record:", masteryError)
+        // 继续尝试删除单词，即使掌握程度删除失败
+      }
+    }
+
+    // 尝试删除词书映射关系
+    try {
+      const { error: mappingError } = await supabase
+        .from("book_word_mapping") // 使用小写表名
+        .delete()
+        .eq("word_id", id)
+
+      if (mappingError) {
+        console.error("Error deleting word mapping:", mappingError)
+        // 继续尝试删除单词，即使映射删除失败
+      }
+    } catch (error) {
+      // 如果表不存在，忽略错误
+      console.error("Error deleting from mapping table:", error)
+    }
+
+    // 然后删除单词
+    const { error } = await supabase.from("word_list").delete().eq("id", id)
+
+    if (error) {
+      console.error("Error deleting vocabulary word:", error)
+      throw error
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in deleteVocabularyWord:", error)
+    return false
+  }
+}
+
+// 更新词汇
+export async function updateVocabularyWord(id: string | number, word: Partial<NewVocabularyWord>): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("word_list").update(word).eq("id", id)
+
+    if (error) {
+      console.error("Error updating vocabulary word:", error)
+      throw error
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in updateVocabularyWord:", error)
+    return false
+  }
+}
+
+// 初始化数据库，检查词汇表是否存在
+export async function initializeDatabase(): Promise<boolean> {
+  try {
+    const { wordListExists, bookListExists, mappingExists } = await checkVocabularyTables()
+
+    if (!wordListExists || !bookListExists || !mappingExists) {
+      console.error("One or more required tables do not exist")
+      return false
+    }
+
+    // 检查word_mastery表是否存在
+    try {
+      const { data, error } = await supabase.from("word_mastery").select("word_id, user_id").limit(1)
+
+      if (error) {
+        console.error("word_mastery table may not exist:", error)
+        return false
+      }
+    } catch (error) {
+      console.error("Error checking word_mastery table:", error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in initializeDatabase:", error)
+    return false
+  }
+}
+
+// 更新指定词汇单词的掌握程度
+export async function updateMasteryLevel(id: string | number, masteryLevel: number): Promise<boolean> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot update mastery level")
+      return false
+    }
+
+    // 首先检查记录是否存在
+    const { data, error: checkError } = await supabase
+      .from("word_mastery")
+      .select("*")
+      .eq("word_id", id)
+      .eq("user_id", userId)
+
+    if (checkError) {
+      console.error("Error checking existing mastery record:", checkError)
+      throw checkError
+    }
+
+    // 如果记录存在，则更新
+    if (data && data.length > 0) {
+      const { error: updateError } = await supabase
+        .from("word_mastery")
+        .update({ mastery_level: masteryLevel })
+        .eq("word_id", id)
+        .eq("user_id", userId)
+
+      if (updateError) {
+        console.error("Error updating mastery level:", updateError)
+        throw updateError
+      }
+    } else {
+      // 如果记录不存在，则插入
+      const { error: insertError } = await supabase.from("word_mastery").insert([
+        {
+          word_id: id,
+          user_id: userId,
+          mastery_level: masteryLevel,
+        },
+      ])
+
+      if (insertError) {
+        console.error("Error inserting mastery level:", insertError)
+        throw insertError
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in updateMasteryLevel:", error)
+    return false
+  }
+}
+
+// 获取指定单词的熟练度
+export async function getMasteryLevel(id: string | number): Promise<number> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot get mastery level")
+      return 0
+    }
+
+    // 查询单词的熟练度
+    const { data, error } = await supabase
+      .from("word_mastery")
+      .select("mastery_level")
+      .eq("word_id", id)
+      .eq("user_id", userId)
+      .single()
+
+    if (error) {
+      // 如果是没有找到记录的错误，返回0
+      if (error.code === "PGRST116") {
+        return 0
+      }
+      console.error("Error getting mastery level:", error)
+      throw error
+    }
+
+    return data?.mastery_level || 0
+  } catch (error) {
+    console.error("Error in getMasteryLevel:", error)
+    return 0
+  }
+}
+
+// 添加单词到词书
+export async function addWordToBook(wordId: number, bookId: string): Promise<boolean> {
+  try {
+    // 检查映射是否已存在
+    const { data: existingMapping, error: checkError } = await supabase
+      .from("book_word_mapping") // 使用小写表名
+      .select("*")
+      .eq("word_id", wordId)
+      .eq("book_id", bookId)
+      .single()
+
+    if (checkError && checkError.code !== "PGRST116") {
+      // PGRST116 是"没有找到结果"的错误，这是我们期望的
+      console.error("Error checking existing mapping:", checkError)
+      throw checkError
+    }
+
+    // 如果映射已存在，直接返回成功
+    if (existingMapping) {
+      return true
+    }
+
+    // 添加新映射
+    const { error } = await supabase.from("book_word_mapping").insert([
+      {
+        book_id: bookId,
+        word_id: wordId,
+      },
+    ])
+
+    if (error) {
+      console.error("Error adding word to book:", error)
+      throw error
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in addWordToBook:", error)
+    return false
+  }
+}
+
+// 从词书中移除单词
+export async function removeWordFromBook(wordId: number, bookId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("book_word_mapping") // 使用小写表名
+      .delete()
+      .eq("word_id", wordId)
+      .eq("book_id", bookId)
+
+    if (error) {
+      console.error("Error removing word from book:", error)
+      throw error
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in removeWordFromBook:", error)
+    return false
+  }
+}
+
+// 创建新词书
+export async function createBook(bookName: string, description: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("book_list")
+      .insert([
+        {
+          book_name: bookName,
+          description: description,
+        },
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Error creating book:", error)
+      throw error
+    }
+
+    return data?.id || null
+  } catch (error) {
+    console.error("Error in createBook:", error)
+    return null
+  }
+}
+
+// 修改 deleteBook 函数，使用小写表名
+export async function deleteBook(bookId: string): Promise<boolean> {
+  try {
+    // 尝试删除词书中的所有单词映射
+    try {
+      const { error: mappingError } = await supabase
+        .from("book_word_mapping") // 使用小写表名
+        .delete()
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error("Error deleting book mappings:", mappingError)
+        // 继续尝试删除词书，即使映射删除失败
+      }
+    } catch (error) {
+      // 如果表不存在，忽略错误
+      console.error("Error deleting from mapping table:", error)
+    }
+
+    // 然后删除词书
+    const { error } = await supabase.from("book_list").delete().eq("id", bookId)
+
+    if (error) {
+      console.error("Error deleting book:", error)
+      throw error
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in deleteBook:", error)
+    return false
+  }
+}
+
+// 添加以下函数到vocabulary-service.ts文件中
+
+// 获取用户的学习进度
+export async function getUserLearningProgress(): Promise<{
+  learnedWords: number[]
+  nextWordsToLearn: number[]
+  creationDates: Record<number, string>
+}> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot get learning progress")
+      return { learnedWords: [], nextWordsToLearn: [], creationDates: {} }
+    }
+
+    // 查询用户已学习的单词
+    const { data: masteryData, error: masteryError } = await supabase
+      .from("word_mastery")
+      .select("word_id, mastery_level, updated_at")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: true })
+
+    if (masteryError) {
+      console.error("Error fetching user mastery data:", masteryError)
+      throw masteryError
+    }
+
+    // 创建单词ID到创建日期的映射
+    const creationDates: Record<number, string> = {}
+
+    // 已学习的单词ID列表
+    const learnedWords: number[] = []
+
+    // 下一组要学习的单词ID列表（掌握程度低的单词）
+    const nextWordsToLearn: number[] = []
+
+    // 处理掌握程度数据
+    masteryData?.forEach((item) => {
+      const wordId = typeof item.word_id === "string" ? Number.parseInt(item.word_id) : item.word_id
+      creationDates[wordId] = item.updated_at
+
+      // 根据掌握程度决定单词是否需要继续学习
+      if (item.mastery_level >= 3) {
+        // 掌握程度高的单词视为已学习
+        learnedWords.push(wordId)
+      } else {
+        // 掌握程度低的单词需要继续学习
+        nextWordsToLearn.push(wordId)
+      }
+    })
+
+    return { learnedWords, nextWordsToLearn, creationDates }
+  } catch (error) {
+    console.error("Error in getUserLearningProgress:", error)
+    return { learnedWords: [], nextWordsToLearn: [], creationDates: {} }
+  }
+}
+
+// 获取下一批要学习的单词
+export async function getNextWordsToLearn(limit = 10, bookId?: string): Promise<VocabularyWord[]> {
+  try {
+    // 获取用户学习进度
+    const { learnedWords, nextWordsToLearn } = await getUserLearningProgress()
+
+    // 如果有需要继续学习的单词，优先返回这些单词
+    if (nextWordsToLearn.length > 0) {
+      // 限制返回的单词数量
+      const wordsToLearn = nextWordsToLearn.slice(0, limit)
+
+      // 查询这些单词的详细信息
+      const { data, error } = await supabase.from("word_list").select("*").in("id", wordsToLearn)
+
+      if (error) {
+        console.error("Error fetching words to learn:", error)
+        throw error
+      }
+
+      return data || []
+    }
+
+    // 如果没有需要继续学习的单词，获取新单词
+    let query = supabase.from("word_list").select("*")
+
+    // 如果指定了词书ID，添加过滤条件
+    if (bookId && bookId !== "my-vocabulary") {
+      // 获取词书中的单词ID
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+
+      if (mappingError) {
+        console.error("Error fetching book word mappings:", mappingError)
+        throw mappingError
+      }
+
+      if (mappingData && mappingData.length > 0) {
+        const wordIds = mappingData.map((item) => item.word_id)
+        query = query.in("id", wordIds)
+      }
+    }
+
+    // 排除已学习的单词
+    if (learnedWords.length > 0) {
+      query = query.not("id", "in", `(${learnedWords.join(",")})`)
+    }
+
+    // 限制返回的单词数量并获取数据
+    const { data, error } = await query.limit(limit)
+
+    if (error) {
+      console.error("Error fetching new words to learn:", error)
+      throw error
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getNextWordsToLearn:", error)
+    return []
+  }
+}
+
+// 按批次获取单词
+export async function getWordsByBatch(batch: number, wordsPerBatch = 5, bookId?: string): Promise<VocabularyWord[]> {
+  try {
+    // 计算偏移量
+    const offset = (batch - 1) * wordsPerBatch
+
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    // 如果没有指定词书ID，直接获取所有单词
+    if (!bookId || bookId === "my-vocabulary") {
+      const { data: words, error: wordsError } = await supabase
+        .from("word_list")
+        .select("*")
+        .order("id", { ascending: true })
+        .range(offset, offset + wordsPerBatch - 1)
+
+      if (wordsError) {
+        console.error("Error fetching vocabulary words by batch:", wordsError)
+        throw wordsError
+      }
+
+      // 处理掌握程度数据
+      return processWordMasteryData(words || [], userId)
+    }
+
+    // 如果指定了词书ID，尝试通过映射表过滤单词
+    try {
+      // 尝试获取词书中的单词ID列表
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+        .order("word_id", { ascending: true })
+        .range(offset, offset + wordsPerBatch - 1)
+
+      // 如果映射表不存在或查询出错，直接返回空数组
+      if (mappingError) {
+        console.error("Error fetching word mappings by batch:", mappingError)
+        return []
+      }
+
+      // 如果词书中有单词，获取这些单词的详细信息
+      if (mappingData && mappingData.length > 0) {
+        const wordIds = mappingData.map((item) => item.word_id)
+
+        const { data: words, error: wordsError } = await supabase
+          .from("word_list")
+          .select("*")
+          .in("id", wordIds)
+          .order("id", { ascending: true })
+
+        if (wordsError) {
+          console.error("Error fetching vocabulary words by batch:", wordsError)
+          throw wordsError
+        }
+
+        // 处理掌握程度数据
+        return processWordMasteryData(words || [], userId)
+      } else {
+        // 词书中没有单词，返回空数组
+        return []
+      }
+    } catch (error) {
+      // 如果出现错误（例如表不存在），返回空数组
+      console.error("Error in book word mapping by batch:", error)
+      return []
+    }
+  } catch (error) {
+    console.error("Error in getWordsByBatch:", error)
+    return []
+  }
+}
+
+// 检查是否有更多批次的单词
+export async function hasMoreBatches(currentBatch: number, wordsPerBatch = 5, bookId?: string): Promise<boolean> {
+  try {
+    // 计算下一批的偏移量
+    const nextBatchOffset = currentBatch * wordsPerBatch
+
+    // 如果没有指定词书ID，检查所有单词
+    if (!bookId || bookId === "my-vocabulary") {
+      const { count, error } = await supabase
+        .from("word_list")
+        .select("*", { count: "exact", head: true })
+        .range(nextBatchOffset, nextBatchOffset)
+
+      if (error) {
+        console.error("Error checking for more batches:", error)
+        return false
+      }
+
+      return count > 0
+    }
+
+    // 如果指定了词书ID，检查词书中的单词
+    try {
+      const { count, error } = await supabase
+        .from("book_word_mapping")
+        .select("*", { count: "exact", head: true })
+        .eq("book_id", bookId)
+        .range(nextBatchOffset, nextBatchOffset)
+
+      if (error) {
+        console.error("Error checking for more batches in book:", error)
+        return false
+      }
+
+      return count > 0
+    } catch (error) {
+      console.error("Error checking for more batches in book mapping:", error)
+      return false
+    }
+  } catch (error) {
+    console.error("Error in hasMoreBatches:", error)
+    return false
+  }
+}
+
+// Add these functions to the existing vocabulary-service.ts file
+
+// 获取关卡进度
+// 获取关卡进度 - 使用 study_log 表
+export async function getLevelProgress(bookId: string): Promise<{
+  completedLevels: number[]
+  currentLevel: number
+}> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot get level progress")
+      return { completedLevels: [], currentLevel: 1 }
+    }
+
+    // 查询用户的关卡进度 - 从 study_log 表获取
+    const { data, error } = await supabase
+      .from("study_log")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("book_id", bookId)
+      .single()
+
+    if (error) {
+      // 如果是没有找到记录的错误，返回默认值
+      if (error.code === "PGRST116") {
+        return { completedLevels: [], currentLevel: 1 }
+      }
+      console.error("Error getting level progress:", error)
+      throw error
+    }
+
+    return {
+      completedLevels: data?.completed_levels || [],
+      currentLevel: data?.current_level || 1,
+    }
+  } catch (error) {
+    console.error("Error in getLevelProgress:", error)
+    return { completedLevels: [], currentLevel: 1 }
+  }
+}
+
+// 更新关卡进度
+// 更新关卡进度 - 使用 study_log 表
+export async function updateLevelProgress(bookId: string, completedLevel: number, nextLevel: number): Promise<boolean> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in, cannot update level progress")
+      return false
+    }
+
+    // 获取当前进度
+    const { completedLevels } = await getLevelProgress(bookId)
+
+    // 添加新完成的关卡（如果尚未添加）
+    if (!completedLevels.includes(completedLevel)) {
+      completedLevels.push(completedLevel)
+    }
+
+    // 检查记录是否存在
+    const { data, error: checkError } = await supabase
+      .from("study_log")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("book_id", bookId)
+      .single()
+
+    if (checkError && checkError.code !== "PGRST116") {
+      console.error("Error checking level progress:", checkError)
+      throw checkError
+    }
+
+    if (data) {
+      // 更新现有记录
+      const { error: updateError } = await supabase
+        .from("study_log")
+        .update({
+          completed_levels: completedLevels,
+          current_level: nextLevel,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId)
+        .eq("book_id", bookId)
+
+      if (updateError) {
+        console.error("Error updating level progress:", updateError)
+        throw updateError
+      }
+    } else {
+      // 创建新记录
+      const { error: insertError } = await supabase.from("study_log").insert([
+        {
+          user_id: userId,
+          book_id: bookId,
+          completed_levels: completedLevels,
+          current_level: nextLevel,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          study_plan: 0, // 默认值，可以根据需要修改
+        },
+      ])
+
+      if (insertError) {
+        console.error("Error inserting level progress:", insertError)
+        throw insertError
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in updateLevelProgress:", error)
+    return false
+  }
+}
+
+// 获取特定关卡的单词
+export async function getWordsByLevel(bookId: string, level: number, wordsPerLevel = 50): Promise<VocabularyWord[]> {
+  try {
+    // 计算偏移量
+    const offset = (level - 1) * wordsPerLevel
+
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    // 如果是"我的单词本"，直接获取所有单词
+    if (bookId === "my-vocabulary") {
+      const { data: words, error: wordsError } = await supabase
+        .from("word_list")
+        .select("*")
+        .order("id", { ascending: true })
+        .range(offset, offset + wordsPerLevel - 1)
+
+      if (wordsError) {
+        console.error("Error fetching vocabulary words by level:", wordsError)
+        throw wordsError
+      }
+
+      // 处理掌握程度数据
+      return processWordMasteryData(words || [], userId)
+    }
+
+    // 如果指定了词书ID，尝试通过映射表过滤单词
+    try {
+      // 尝试获取词书中的单词ID列表
+      const { data: mappingData, error: mappingError } = await supabase
+        .from("book_word_mapping")
+        .select("word_id")
+        .eq("book_id", bookId)
+        .order("word_id", { ascending: true })
+        .range(offset, offset + wordsPerLevel - 1)
+
+      // 如果映射表不存在或查询出错，直接返回空数组
+      if (mappingError) {
+        console.error("Error fetching word mappings by level:", mappingError)
+        return []
+      }
+
+      // 如果词书中有单词，获取这些单词的详细信息
+      if (mappingData && mappingData.length > 0) {
+        const wordIds = mappingData.map((item) => item.word_id)
+
+        const { data: words, error: wordsError } = await supabase
+          .from("word_list")
+          .select("*")
+          .in("id", wordIds)
+          .order("id", { ascending: true })
+
+        if (wordsError) {
+          console.error("Error fetching vocabulary words by level:", wordsError)
+          throw wordsError
+        }
+
+        // 处理掌握程度数据
+        return processWordMasteryData(words || [], userId)
+      } else {
+        // 词书中没有单词，返回空数组
+        return []
+      }
+    } catch (error) {
+      // 如果出现错误（例如表不存在），返回空数组
+      console.error("Error in book word mapping by level:", error)
+      return []
+    }
+  } catch (error) {
+    console.error("Error in getWordsByLevel:", error)
+    return []
+  }
+}
+
+// 完成关卡
+export async function completeLevel(bookId: string, level: number): Promise<boolean> {
+  try {
+    // 获取词书的总关卡数
+    const wordCount = await getBookWordCount(bookId)
+    const totalLevels = Math.ceil(wordCount / 50)
+
+    // 计算下一关卡
+    const nextLevel = level < totalLevels ? level + 1 : level
+
+    // 更新关卡进度
+    return await updateLevelProgress(bookId, level, nextLevel)
+  } catch (error) {
+    console.error("Error in completeLevel:", error)
+    return false
+  }
 }

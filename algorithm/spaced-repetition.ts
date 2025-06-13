@@ -1,4 +1,7 @@
-import type { ReviewResult } from "@/types/review"
+/**
+ * 复习结果类型
+ */
+type ReviewResult = "again" | "hard" | "good" | "easy"
 
 /**
  * 计算下一次复习的间隔和难度因子
@@ -33,8 +36,8 @@ export function calculateNextReview(
 
   switch (result) {
     case "again": // 完全不记得
-      // 重置间隔为1天
-      nextInterval = 1
+      // 重置间隔为0天，表示需要立即复习
+      //nextInterval = 0
       // 降低难度因子
       newEaseFactor = Math.max(MIN_EASE_FACTOR, easeFactor - 0.2)
       break
@@ -82,8 +85,8 @@ export function calculateNextReview(
   const randomFactor = 0.95 + Math.random() * 0.1
   nextInterval = nextInterval * randomFactor
 
-  // 确保间隔至少为1天
-  nextInterval = Math.max(1, Math.round(nextInterval))
+  // 确保间隔至少为0天（对于"again"）或1天（对于其他结果）
+  nextInterval = result === "again" ? 0 : Math.max(1, Math.round(nextInterval))
 
   return {
     nextInterval,
@@ -93,46 +96,12 @@ export function calculateNextReview(
 }
 
 /**
- * 计算下次复习日期
- *
- * @param interval 间隔天数
- * @returns 下次复习的日期（ISO字符串）
+ * 计算下一次复习日期
+ * @param interval 间隔（天）
+ * @returns 下次复习日期（ISO字符串）
  */
 export function calculateNextReviewDate(interval: number): string {
   const now = new Date()
-  const nextDate = new Date(now)
-  nextDate.setDate(now.getDate() + interval)
-  return nextDate.toISOString()
-}
-
-/**
- * 获取今天应该复习的单词
- *
- * @param reviewItems 所有复习项
- * @returns 今天应该复习的项目
- */
-export function getDueItems(reviewItems: any[]): any[] {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  return reviewItems.filter((item) => {
-    const reviewDate = new Date(item.next_review_date)
-    reviewDate.setHours(0, 0, 0, 0)
-    return reviewDate <= today
-  })
-}
-
-/**
- * 根据复习结果的颜色代码
- *
- * @param interval 间隔天数
- * @returns 对应的颜色类名
- */
-export function getIntervalColorClass(interval: number): string {
-  if (interval <= 1) return "bg-red-100 border-red-300" // 需要频繁复习
-  if (interval <= 3) return "bg-orange-100 border-orange-300" // 短期记忆
-  if (interval <= 7) return "bg-yellow-100 border-yellow-300" // 开始巩固
-  if (interval <= 14) return "bg-blue-100 border-blue-300" // 中期记忆
-  if (interval <= 30) return "bg-green-100 border-green-300" // 长期记忆
-  return "bg-purple-100 border-purple-300" // 已掌握
+  const nextReviewDate = new Date(now.setDate(now.getDate() + interval))
+  return nextReviewDate.toISOString()
 }

@@ -108,6 +108,11 @@ export function UserPageButton({
           title: "登录成功",
           description: `欢迎回来，${userData.name || "用户"}！`,
         })
+
+        // 登录成功后刷新页面
+        setTimeout(() => {
+          window.location.reload()
+        }, 500) // 延迟1秒后刷新，让用户看到成功提示
       } else {
         toast({
           title: "登录失败",
@@ -300,4 +305,3 @@ export function UserPageButton({
     </>
   )
 }
-

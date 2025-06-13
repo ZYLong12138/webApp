@@ -8,6 +8,8 @@ import { WordCardSelection } from "@/components/word-card-selection"
 import { WordLearningCard } from "@/components/word-learning-card"
 import type { VocabularyWord } from "@/types/vocabulary"
 import { useTheme } from "@/contexts/theme-context"
+import { useStudyTimeTracker } from "@/hooks/use-study-time-tracker"
+import { updateStudyLog } from "@/services/study-log-service"
 
 export default function LearnWordPage() {
   const router = useRouter()
@@ -21,6 +23,19 @@ export default function LearnWordPage() {
 
   // 在 LearnWordPage 组件中添加 allLevelWords 状态
   const [allLevelWords, setAllLevelWords] = useState<VocabularyWord[]>([])
+
+  // 使用学习时间跟踪器
+  const { startTracking, stopTracking } = useStudyTimeTracker("learn", bookId)
+
+  // 开始跟踪学习时间
+  useEffect(() => {
+    startTracking()
+
+    // 组件卸载时停止跟踪
+    return () => {
+      stopTracking()
+    }
+  }, [])
 
   // 获取词书信息
   useEffect(() => {
@@ -50,7 +65,9 @@ export default function LearnWordPage() {
   }, [bookId, level])
 
   // 处理学习完成
-  const handleLearningComplete = () => {
+  const handleLearningComplete = async () => {
+    // 更新打卡记录
+    await updateStudyLog()
     setIsSelectionMode(true)
   }
 

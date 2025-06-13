@@ -52,6 +52,41 @@ export async function getReviewQueue(limit = 100): Promise<ReviewQueueItem[]> {
 }
 
 /**
+ * 获取所有复习队列项目
+ * @returns 所有复习队列项目数组
+ */
+export async function getAllReviewQueueItems(): Promise<ReviewQueueItem[]> {
+  try {
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in")
+      return []
+    }
+
+    const { data, error } = await supabase
+      .from("review_queue")
+      .select("*")
+      .eq("user_id", userId)
+      .order("next_review_date", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching all review queue items:", error)
+      throw error
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getAllReviewQueueItems:", error)
+    return []
+  }
+}
+
+/**
  * 获取复习队列中的单词详情
  * @param limit 限制返回的数量
  * @returns 包含单词详情的复习队列
@@ -131,10 +166,9 @@ export async function addToReviewQueue(wordId: string | number, initialInterval 
       .select("id")
       .eq("user_id", userId)
       .eq("word_id", wordId)
-      .single()
+      .maybeSingle() // 使用maybeSingle代替single
 
-    if (checkError && checkError.code !== "PGRST116") {
-      // PGRST116是"没有找到结果"的错误，这是我们期望的
+    if (checkError) {
       console.error("Error checking existing review item:", checkError)
       throw checkError
     }
@@ -245,16 +279,123 @@ export async function addMultipleToReviewQueue(wordIds: Array<string | number>, 
  */
 export async function submitReviewResult(reviewItemId: number, result: ReviewResult): Promise<boolean> {
   try {
-    // 获取当前复习项
+    // 获取当前用户ID
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
+
+    if (!userId) {
+      console.error("User not logged in")
+      return false
+    }
+
+    // 首先检查复习项是否存在于word_list表中
+    const { data: wordData, error: wordError } = await supabase
+      .from("word_list")
+      .select("id")
+      .eq("id", reviewItemId)
+      .maybeSingle()
+
+    if (wordError) {
+      console.error(`Error checking word existence (ID: ${reviewItemId}):`, wordError)
+    }
+
+    if (!wordData) {
+      console.warn(`Word with ID ${reviewItemId} does not exist in word_list table`)
+      // 如果单词不存在，我们可以选择跳过而不是失败
+      return false
+    }
+
+    // 获取当前复习项 - 使用maybeSingle()代替single()
     const { data: reviewItem, error: fetchError } = await supabase
       .from("review_queue")
       .select("*")
-      .eq("id", reviewItemId)
-      .single()
+      .eq("word_id", reviewItemId) // 使用word_id而不是id
+      .eq("user_id", userId)
+      .maybeSingle()
 
     if (fetchError) {
-      console.error("Error fetching review item:", fetchError)
+      console.error(`Error fetching review item (word_id: ${reviewItemId}):`, fetchError)
       throw fetchError
+    }
+
+    // 如果没有找到对应的复习项，尝试创建一个新的
+    if (!reviewItem) {
+      console.warn(`Review item not found for word_id ${reviewItemId} and user ${userId}, creating new entry`)
+
+      // 创建一个新的复习项
+      const newItem: NewReviewQueueItem = {
+        user_id: userId,
+        word_id: reviewItemId,
+        next_review_date: new Date().toISOString(), // 立即复习
+        current_interval: 0,
+        ease_factor: 2.5, // 默认难度因子
+        review_count: 0,
+        last_review_date: null,
+        last_review_result: null,
+      }
+
+      const { error: insertError } = await supabase.from("review_queue").insert([newItem])
+
+      if (insertError) {
+        console.error(`Error creating new review item for word_id ${reviewItemId}:`, insertError)
+        return false
+      }
+
+      // 重新获取刚创建的复习项
+      const { data: newReviewItem, error: newFetchError } = await supabase
+        .from("review_queue")
+        .select("*")
+        .eq("word_id", reviewItemId)
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (newFetchError) {
+        console.error(`Error fetching newly created review item:`, newFetchError)
+        return false
+      }
+
+      // 使用新创建的复习项，如果存在的话
+      if (newReviewItem) {
+        // 计算新的间隔和难度因子
+        const { nextInterval, newEaseFactor, reviewCount } = calculateNextReview(
+          result,
+          newReviewItem.current_interval || 0,
+          newReviewItem.ease_factor || 2.5,
+          newReviewItem.review_count || 0,
+        )
+
+        // 计算下次复习日期
+        const nextReviewDate = calculateNextReviewDate(nextInterval)
+
+        // 更新复习项
+        const updateData: UpdateReviewQueueItem = {
+          next_review_date: nextReviewDate,
+          current_interval: nextInterval,
+          ease_factor: newEaseFactor,
+          review_count: reviewCount,
+          last_review_date: new Date().toISOString(),
+          last_review_result: result,
+        }
+
+        // 更新时同时使用word_id和user_id作为条件
+        const { error: updateError } = await supabase
+          .from("review_queue")
+          .update(updateData)
+          .eq("word_id", reviewItemId)
+          .eq("user_id", userId)
+
+        if (updateError) {
+          console.error(`Error updating review item (word_id: ${reviewItemId}):`, updateError)
+          throw updateError
+        }
+
+        return true
+      } else {
+        console.error(`Failed to create or retrieve review item for word_id ${reviewItemId}`)
+        return false
+      }
     }
 
     // 计算新的间隔和难度因子
@@ -278,16 +419,40 @@ export async function submitReviewResult(reviewItemId: number, result: ReviewRes
       last_review_result: result,
     }
 
-    const { error: updateError } = await supabase.from("review_queue").update(updateData).eq("id", reviewItemId)
+    // 更新时同时使用word_id和user_id作为条件
+    const { error: updateError } = await supabase
+      .from("review_queue")
+      .update(updateData)
+      .eq("word_id", reviewItemId)
+      .eq("user_id", userId)
 
     if (updateError) {
-      console.error("Error updating review item:", updateError)
+      console.error(`Error updating review item (word_id: ${reviewItemId}):`, updateError)
       throw updateError
     }
 
     return true
   } catch (error) {
-    console.error("Error in submitReviewResult:", error)
+    console.error(`Error in submitReviewResult (ID: ${reviewItemId}):`, error)
+    return false
+  }
+}
+
+// 添加批量提交复习结果的函数
+export async function batchSubmitReviewResults(
+  results: Array<{ reviewItemId: number; result: ReviewResult }>,
+): Promise<boolean> {
+  try {
+    // 使用事务确保所有更新要么全部成功，要么全部失败
+    const updates = results.map(({ reviewItemId, result }) => submitReviewResult(reviewItemId, result))
+
+    // 并行处理所有更新请求
+    await Promise.all(updates)
+
+    console.log(`成功更新了 ${results.length} 个复习结果`)
+    return true
+  } catch (error) {
+    console.error("Error in batchSubmitReviewResults:", error)
     return false
   }
 }

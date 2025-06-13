@@ -15,12 +15,27 @@ import { ThemeSwitcherButton } from "@/Integration_modules/theme-switcher-button
 import { useTheme } from "@/contexts/theme-context"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
+import { useStudyTimeTracker } from "@/hooks/use-study-time-tracker"
+import { updateStudyLog } from "@/services/study-log-service"
 
 export default function DictationPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const bookId = searchParams.get("bookId") || undefined
   const level = Number.parseInt(searchParams.get("level") || "1", 10)
+
+  // 使用学习时间跟踪器
+  const { startTracking, stopTracking } = useStudyTimeTracker("dictation", bookId)
+
+  // 开始跟踪学习时间
+  useEffect(() => {
+    startTracking()
+
+    // 组件卸载时停止跟踪
+    return () => {
+      stopTracking()
+    }
+  }, [])
 
   const { theme } = useTheme()
   const { toast } = useToast()
@@ -154,6 +169,8 @@ export default function DictationPage() {
       } else {
         // 所有单词已完成
         setIsPaused(true)
+        // 更新打卡记录
+        updateStudyLog()
       }
     }, 1500)
   }
@@ -375,4 +392,3 @@ export default function DictationPage() {
     </ThemeProvider>
   )
 }
-

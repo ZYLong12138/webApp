@@ -2,12 +2,15 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Volume2 } from "lucide-react"
+import { Volume2, AlertCircle } from "lucide-react"
 import { motion } from "framer-motion"
 
+// 修改RecallCard组件，移除"下一个"按钮，只保留结果按钮
+
+// 首先，修改组件的props类型，移除onNext属性
 interface RecallCardProps {
   word: {
     id: string | number
@@ -18,36 +21,47 @@ interface RecallCardProps {
     current_interval?: number
     ease_factor?: number
     review_count?: number
+    repeatCount?: number // 添加重复次数属性
   }
-  onNext: () => void
   onResult: (result: "again" | "hard" | "good" | "easy") => void
+  repeatCount?: number // 当前重复次数
+  maxRepeatCount?: number // 最大重复次数
 }
 
-export function RecallCard({ word, onNext, onResult }: RecallCardProps) {
+// 然后，修改组件实现，移除"下一个"按钮相关代码
+export function RecallCard({ word, onResult, repeatCount = 0, maxRepeatCount = 5 }: RecallCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
   const [hasAnswered, setHasAnswered] = useState(false)
 
-  // 处理卡片翻转
+  // Reset state when word changes
+  useEffect(() => {
+    setIsFlipped(false)
+    setHasAnswered(false)
+  }, [word.id, repeatCount]) // 添加 repeatCount 作为依赖项，确保重复单词时也会重置状态
+
+  // Handle card flip
   const handleFlip = () => {
     if (!hasAnswered) {
       setIsFlipped(!isFlipped)
     }
   }
 
-  // 处理复习结果
+  // Handle result selection
   const handleResult = (result: "again" | "hard" | "good" | "easy") => {
     setHasAnswered(true)
     onResult(result)
+
+    // Automatically move to next card after a short delay
+    setTimeout(() => {}, 800)
   }
 
-  // 播放单词发音
+  // Play pronunciation
   const playPronunciation = (e: React.MouseEvent) => {
-    e.stopPropagation() // 防止触发卡片翻转
-    // 这里可以添加实际的发音逻辑
+    e.stopPropagation() // Prevent card flip
     console.log(`播放单词 "${word.word}" 的发音`)
   }
 
-  // 获取间隔信息文本
+  // Get interval text
   const getIntervalText = () => {
     if (!word.current_interval) return "首次复习"
     if (word.current_interval < 1) return "今日复习"
@@ -55,15 +69,27 @@ export function RecallCard({ word, onNext, onResult }: RecallCardProps) {
     return `${Math.round(word.current_interval)}天后复习`
   }
 
+  // 移除不需要的 handleNext 函数，因为我们已经自动跳转到下一个单词
+  const handleNext = () => {
+    setIsFlipped(false)
+    setHasAnswered(false)
+  }
+
   return (
     <div className="max-w-md mx-auto w-full">
       <Card className="overflow-hidden">
         <div className="perspective">
+          {/* 添加卡片位置指示器 */}
+          <div className="absolute top-2 right-2 z-10">
+            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+              #{repeatCount > 0 ? "重复" : "原始"}
+            </span>
+          </div>
           <div
             className={`flip-card-inner transition-transform duration-500 ${isFlipped ? "rotate-y-180" : ""}`}
             style={{ transformStyle: "preserve-3d" }}
           >
-            {/* 卡片正面 - 单词 */}
+            {/* Card front - word */}
             <CardContent
               className={`p-8 min-h-[300px] flex flex-col items-center justify-center cursor-pointer ${
                 isFlipped ? "backface-hidden" : ""
@@ -78,11 +104,22 @@ export function RecallCard({ word, onNext, onResult }: RecallCardProps) {
                   </Button>
                 </div>
                 {word.pronunciation && <p className="text-gray-500 text-sm mb-4">{word.pronunciation}</p>}
+
+                {/* Show repeat count warning */}
+                {repeatCount > 0 && (
+                  <div className="mt-2 flex items-center justify-center text-amber-600">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">
+                      已重复 {repeatCount}/{maxRepeatCount} 次
+                    </span>
+                  </div>
+                )}
+
                 <p className="text-sm text-gray-500 mt-6">点击卡片查看答案</p>
               </div>
             </CardContent>
 
-            {/* 卡片背面 - 释义 */}
+            {/* Card back - definition */}
             <CardContent
               className={`p-8 min-h-[300px] flex flex-col items-center justify-center cursor-pointer absolute inset-0 ${
                 isFlipped ? "" : "backface-hidden"
@@ -101,6 +138,16 @@ export function RecallCard({ word, onNext, onResult }: RecallCardProps) {
                     </span>
                   )}
                 </div>
+
+                {/* Show repeat count warning */}
+                {repeatCount > 0 && (
+                  <div className="mt-2 flex items-center justify-center text-amber-600">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <span className="text-xs">
+                      已重复 {repeatCount}/{maxRepeatCount} 次
+                    </span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </div>
@@ -116,6 +163,7 @@ export function RecallCard({ word, onNext, onResult }: RecallCardProps) {
                 variant="outline"
                 className="border-red-500 hover:bg-red-500/10"
                 onClick={() => handleResult("again")}
+                disabled={repeatCount >= maxRepeatCount} // Disable "don't remember" button if max repeat count reached
               >
                 不记得
               </Button>
@@ -148,11 +196,12 @@ export function RecallCard({ word, onNext, onResult }: RecallCardProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
               className="w-full"
-            >
-              <Button variant="default" onClick={onNext} className="w-full">
-                下一个
-              </Button>
-            </motion.div>
+            ></motion.div>
+          )}
+
+          {/* Show warning if max repeat count reached */}
+          {isFlipped && !hasAnswered && repeatCount >= maxRepeatCount && (
+            <div className="text-xs text-red-500 text-center mt-2">已达到最大重复次数，请选择其他选项</div>
           )}
         </CardFooter>
       </Card>
